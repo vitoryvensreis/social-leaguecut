@@ -4,6 +4,9 @@ import secrets
 from pathlib import Path
 from datetime import datetime
 from urllib.parse import quote
+import urllib.request
+import urllib.parse
+import json
 import pymysql
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Form
@@ -77,6 +80,7 @@ def home(request:Request):
         except Exception:
             data["error"]="Banco de dados indisponível. Verifique as configurações na VPS."
             data.update(accounts=[],posts=[],queue_count=0)
+    data["proxy_configured"]=bool(os.getenv("WEBSHARE_PROXY_URL"))
     return templates.TemplateResponse(request,"index.html",data)
 
 @app.post("/login")
@@ -130,3 +134,27 @@ def add_post(request:Request,title:str=Form(...),caption:str=Form(""),scheduled_
                 cur.execute("INSERT INTO social_post_accounts(post_id,account_id) SELECT %s,id FROM social_accounts WHERE id=%s",(post_id,account_id))
         db.commit()
     return redirect()
+
+@app.post("/proxy/test")
+def test_proxy(request:Request,csrf:str=Form(...)):
+    if not admin(request) or not form_allowed(request,csrf):
+        return JSONResponse({"error":"Forbidden"},status_code=403)
+    proxy=os.getenv("WEBSHARE_PROXY_URL","").strip()
+    if not proxy:
+        return redirect("Proxy não configurado no arquivo .env")
+    parsed=urllib.parse.urlsplit(proxy)
+    if parsed.scheme not in ("http","https","socks5") or not parsed.hostname:
+        return redirect("Formato de proxy inválido")
+    if parsed.scheme=="socks5":
+        return redirect("Para o teste HTTP use um proxy HTTP/HTTPS Webshare")
+    handler=urllib.request.ProxyHandler({"http":proxy,"https":proxy})
+    opener=urllib.request.build_opener(handler)
+    try:
+        with opener.open("https://api.ipify.org?format=json",timeout=10) as response:
+            result=json.load(response)
+        ip=result.get("ip","")
+        if not isinstance(ip,str) or len(ip)>64:
+            raise ValueError("Resposta inesperada")
+        return redirect("Proxy conectado. IP de saída: "+ip)
+    except Exception:
+        return redirect("Falha na conexão proxy. Confira host, porta e credenciais")
