@@ -1,0 +1,66 @@
+name: Deploy Social LeagueCut
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: social-leaguecut-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate SSH configuration
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          USER: ${{ secrets.VPS_USER }}
+          KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST_KEYS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          for value in "$HOST" "$USER" "$KEY" "$HOST_KEYS"; do
+            if [ -z "$value" ]; then
+              echo "::error::Missing VPS SSH configuration. Configure VPS_KNOWN_HOSTS and existing VPS_* secrets."
+              exit 1
+            fi
+          done
+
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Update project checkout
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          PORT="${VPS_PORT:-22}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -p "$PORT" "$VPS_USER@$VPS_HOST" \
+            "EXPECTED_SHA='$EXPECTED_SHA' bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd /home/leaguecut-social-motor/htdocs/social.leaguecut.com.br
+          test "$(id -un)" = "leaguecut-social-motor"
+          test "$(git remote get-url origin)" = "https://github.com/vitoryvensreis/social-leaguecut.git"
+          test "$(git branch --show-current)" = "main"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          git fetch --prune origin main
+          git merge --ff-only origin/main
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          echo "Repository synchronized at $(git rev-parse --short HEAD)"
+          echo "Application dependencies and service restart not configured yet."
+          REMOTE
