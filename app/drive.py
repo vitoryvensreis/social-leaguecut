@@ -42,7 +42,15 @@ def flow(state=None, code_verifier=None):
     return Flow.from_client_config(config,**kwargs)
 
 def crypt():
-    return Fernet(os.environ["PROXY_ENCRYPTION_KEY"].encode())
+    """Drive OAuth uses a dedicated key, with backward-compatible legacy fallback.
+
+    Keep the SAME existing key when migrating. Generating a new key would make
+    previously encrypted OAuth tokens unreadable until reconnecting Drive.
+    """
+    key=os.environ.get("GOOGLE_TOKEN_ENCRYPTION_KEY") or os.environ.get("PROXY_ENCRYPTION_KEY")
+    if not key:
+        raise ValueError("Google Drive token encryption key is not configured")
+    return Fernet(key.encode())
 
 def init(db):
     with db.cursor() as c:
