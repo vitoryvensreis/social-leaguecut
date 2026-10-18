@@ -20,6 +20,27 @@ class AuthenticationSecurityTests(unittest.TestCase):
         self.assertEqual(status,"needs_verification")
         self.assertIn("verificação",message)
 
+    def test_unknown_failure_is_paused_not_flagged_bad_password(self):
+        class UnexpectedClientResponse(Exception):
+            pass
+        status,message=failure_reason(UnexpectedClientResponse())
+        self.assertEqual(status,"paused")
+        self.assertIn("diagnóstico",message)
+
+    def test_proxy_error_is_distinguished(self):
+        class ProxyError(Exception):
+            pass
+        status,message=failure_reason(ProxyError())
+        self.assertEqual(status,"paused")
+        self.assertIn("proxy",message.lower())
+
+    def test_bad_password_is_recognized(self):
+        class BadPassword(Exception):
+            pass
+        status,message=failure_reason(BadPassword())
+        self.assertEqual(status,"failed")
+        self.assertIn("Credenciais",message)
+
     def test_network_error_does_not_recommend_rotation(self):
         status,message=failure_reason(TimeoutError())
         self.assertEqual(status,"paused")
