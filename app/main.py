@@ -13,11 +13,13 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
+from app.proxies import router as proxies_router, available as get_proxies
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 templates = Jinja2Templates(directory=str(ROOT / "app" / "templates"))
 app = FastAPI(title="Social LeagueCut", docs_url=None, redoc_url=None)
+app.include_router(proxies_router)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET") or "SET_SESSION_SECRET_IN_ENV_BEFORE_LOGIN", https_only=True, same_site="lax")
 
 def db_connection():
@@ -80,7 +82,14 @@ def home(request:Request):
         except Exception:
             data["error"]="Banco de dados indisponível. Verifique as configurações na VPS."
             data.update(accounts=[],posts=[],queue_count=0)
-    data["proxy_configured"]=bool(os.getenv("WEBSHARE_PROXY_URL"))
+    data["proxy_configured"]=bool(os.getenv("PROXY_ENCRYPTION_KEY"))
+    data["proxies"]=[]
+    if admin(request) and data["proxy_configured"]:
+        try:
+            with db_connection() as db:
+                data["proxies"]=get_proxies(db)
+        except Exception:
+            data["error"]="Não foi possível consultar proxies"
     return templates.TemplateResponse(request,"index.html",data)
 
 @app.post("/login")
