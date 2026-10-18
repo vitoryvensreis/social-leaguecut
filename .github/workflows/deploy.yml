@@ -42,6 +42,31 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
+      - name: Wait for VPS SSH reachability
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          reachable=0
+          for attempt in 1 2 3 4; do
+            echo "SSH preflight attempt $attempt/4"
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                -o ConnectTimeout=10 -o ConnectionAttempts=1 \
+                -p "$PORT" "$VPS_USER@$VPS_HOST" 'printf SSH_READY' \
+                | grep -q 'SSH_READY'; then
+              reachable=1
+              break
+            fi
+            if [ "$attempt" -lt 4 ]; then sleep 10; fi
+          done
+          if [ "$reachable" -ne 1 ]; then
+            echo "::error::VPS SSH unreachable on configured port after four attempts. Check VPS firewall, public IP and VPS_PORT."
+            exit 1
+          fi
+
       - name: Update project checkout
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
