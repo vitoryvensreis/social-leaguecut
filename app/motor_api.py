@@ -134,9 +134,12 @@ def account_status(account_id:int,update:AccountStatus,authorization:str|None=He
         raise HTTPException(400,detail="Invalid status")
     with db_conn() as db:
         with db.cursor() as c:
-            c.execute("UPDATE social_accounts SET status=%s WHERE id=%s",(update.status,account_id))
-            if c.rowcount!=1:
+            # MySQL returns rowcount=0 when status is unchanged. That is NOT
+            # a missing account: it caused repeated fake "deploy 404" errors.
+            c.execute("SELECT id FROM social_accounts WHERE id=%s",(account_id,))
+            if not c.fetchone():
                 raise HTTPException(404,detail="Account not found")
+            c.execute("UPDATE social_accounts SET status=%s WHERE id=%s",(update.status,account_id))
         db.commit()
     return {"status":"ok"}
 
@@ -218,7 +221,7 @@ def test_claim(payload:TestClaim,authorization:str|None=Header(default=None)):
 @router.post("/jobs/{job_id}/result")
 def publish_result(job_id:int,payload:Result,authorization:str|None=Header(default=None)):
     authorize(authorization)
-    if payload.outcome not in ("published","needs_review"):
+    if payload.outcome not in ("published","needs_review","blocked"):
         raise HTTPException(400,detail="Invalid outcome")
     if payload.outcome=="published" and (not payload.permalink or not validate_permalink(payload.permalink)):
         raise HTTPException(400,detail="Valid permalink required")
@@ -238,8 +241,12 @@ def publish_result(job_id:int,payload:Result,authorization:str|None=Header(defau
                 c.execute("""UPDATE social_daily_jobs SET status='published',permalink=%s,
                     media_pk=%s,published_at=UTC_TIMESTAMP() WHERE id=%s""",
                     (payload.permalink,payload.media_pk,job_id))
-            else:
+            elif payload.outcome=="needs_review":
                 c.execute("UPDATE social_daily_jobs SET status='needs_review' WHERE id=%s",(job_id,))
+            else:
+                # This outcome is only valid if the browser NEVER submitted a
+                # Share action. It is NOT eligible for automatic rescheduling.
+                c.execute("UPDATE social_daily_jobs SET status='blocked' WHERE id=%s",(job_id,))
             c.execute("UPDATE social_motor_claims SET finished_at=UTC_TIMESTAMP() WHERE job_id=%s",(job_id,))
         db.commit()
     return {"status":"ok","outcome":payload.outcome}

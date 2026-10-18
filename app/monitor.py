@@ -74,7 +74,7 @@ def report(db):
                 COUNT(j.id) AS scheduled,
                 SUM(CASE WHEN j.status='published' THEN 1 ELSE 0 END) AS published,
                 SUM(CASE WHEN j.status='planned' THEN 1 ELSE 0 END) AS planned,
-                SUM(CASE WHEN j.status IN ('missed','needs_review','failed') THEN 1 ELSE 0 END) AS attention,
+                SUM(CASE WHEN j.status IN ('missed','needs_review','failed','blocked') THEN 1 ELSE 0 END) AS attention,
                 COALESCE(SUM(CASE WHEN j.status='published' THEN m.views END),0) AS known_views
             FROM social_accounts a
             LEFT JOIN social_daily_jobs j ON j.account_id=a.id
@@ -113,7 +113,7 @@ def report(db):
         "totals":known,"accounts":accounts,"upcoming":upcoming,
         "history":history,"daily":daily,
         "overdue":overdue,
-        "needs_attention":overdue+sum(statuses.get(s,0) for s in ("missed","needs_review","failed")),
+        "needs_attention":overdue+sum(statuses.get(s,0) for s in ("missed","needs_review","failed","blocked")),
     }
 
 def csv_cell(v):
