@@ -45,6 +45,11 @@
 <form method="post" action="/bulk/accounts/remove-failed" onsubmit="return confirm('Excluir apenas contas marcadas como falhas e sem publicações? Os agendamentos dessas contas também serão excluídos.')"><input type="hidden" name="csrf" value="{{csrf}}"><input type="hidden" name="confirmed" value="yes"><button class="secondary">Excluir contas falhas</button></form></div>
 <div id="account-batch-progress" class="muted" role="status" style="margin-top:12px"></div>
 <p class="muted">O teste de contas é sequencial e interrompe ao encontrar verificação de segurança ou bloqueio; não usa outros proxies para contornar a restrição.</p></section>
+<section class="card" id="instagram-diagnostics"><h2>Diagnóstico de autenticação Instagram</h2>
+<p class="muted">Quando um perfil falha, registramos a categoria e o nome técnico do erro — nunca as senhas, tokens nem a resposta bruta. Não repita testes em massa diante de bloqueios ou falhas desconhecidas.</p>
+<div style="overflow-x:auto"><table><tr><th>Perfil</th><th>Etapa</th><th>Categoria</th><th>Erro técnico</th><th>Quando</th></tr>
+{% for e in instagram_diagnostics %}<tr><td>@{{e.username}}</td><td>{{e.stage}}</td><td>{{e.category}}</td><td><code>{{e.exception_type}}</code></td><td>{{e.created_at}}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">Nenhum diagnóstico novo registrado ainda. Veja o log do serviço para tentativas anteriores.</td></tr>{% endfor %}</table></div></section>
 <section class="card" id="conectar-instagram"><h2>Conectar Instagram</h2>
 <p class="muted">Conecte cada perfil com sua senha e, se necessário, um código de autenticação de dois fatores. As credenciais e sessões ficam criptografadas no banco. Usaremos o proxy fixo associado à conta — sem trocar IP quando houver bloqueios ou verificações.</p>
 {% if not instagram_enabled %}<div class="notice">Antes de conectar, configure INSTAGRAM_ENCRYPTION_KEY no .env da VPS e substitua a chave SSH de deploy exposta anteriormente.</div>{% endif %}
@@ -102,8 +107,8 @@ async function testAllAccounts(){
       const data=await response.json();
       if(!response.ok){target.textContent='Teste interrompido: '+(data.message||'erro');return}
       target.textContent='Perfil '+(i+1)+': '+data.status+' — '+data.message;
-      if(['needs_verification','paused'].includes(data.status)){
-        target.textContent+=' Teste interrompido para não forçar novas autenticações.';return;
+      if(!['connected','recent'].includes(data.status)){
+        target.textContent+=' Teste interrompido após a primeira falha. Confira o diagnóstico antes de continuar.';return;
       }
       if(i+1<ids.length)await delay(9000);
     }

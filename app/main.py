@@ -17,7 +17,7 @@ from app.proxies import router as proxies_router, available as get_proxies
 from app.routing import router as routing_router, list_routes, preview, auto_assign_proxy
 from app.drive import router as drive_router
 from app.campaign import router as campaign_router, settings as campaign_settings, summary as campaign_summary, stored_captions, mysql_clock
-from app.instagram import router as instagram_router, init as init_instagram
+from app.instagram import router as instagram_router, init as init_instagram, diagnostics as instagram_diagnostics
 from app.bulk import router as bulk_router
 from app.insights import router as insights_router, dashboard as insights_dashboard
 
@@ -132,6 +132,13 @@ def home(request:Request):
                 data["insights"]=insights_dashboard(db)
         except Exception:
             data["error"]="Não foi possível consultar o histórico de postagens."
+    data["instagram_diagnostics"]=[]
+    if admin(request):
+        try:
+            with db_connection() as db:
+                data["instagram_diagnostics"]=instagram_diagnostics(db)
+        except Exception:
+            data["error"]="Não foi possível consultar os diagnósticos de autenticação."
     return templates.TemplateResponse(request,"index.html",data)
 
 @app.post("/login")
