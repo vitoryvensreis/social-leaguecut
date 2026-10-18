@@ -6,6 +6,7 @@ challenges, rotate IPs, or fall back to the VPS address.
 import json
 import logging
 import os
+import re
 import urllib.parse
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import APIRouter, Request, Form
@@ -25,7 +26,32 @@ def init(db):
             last_verified DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             last_error VARCHAR(80) DEFAULT NULL
         )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS social_ig_diagnostics (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            account_id INT NOT NULL,
+            stage VARCHAR(24) NOT NULL,
+            category VARCHAR(32) NOT NULL,
+            exception_type VARCHAR(80) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_account_created(account_id,created_at)
+        )""")
     db.commit()
+
+def record_failure(db, account_id:int, exc:Exception, stage:str, status:str):
+    """Persist safe error *types* only; never raw exceptions, passwords or tokens."""
+    error_name=re.sub(r"[^A-Za-z0-9_]","",type(exc).__name__)[:80] or "Unknown"
+    with db.cursor() as c:
+        c.execute("""INSERT INTO social_ig_diagnostics
+                (account_id,stage,category,exception_type) VALUES(%s,%s,%s,%s)""",
+                (account_id,stage,status,error_name))
+
+def diagnostics(db,limit=25):
+    init(db)
+    with db.cursor() as c:
+        c.execute("""SELECT e.stage,e.category,e.exception_type,e.created_at,a.username
+             FROM social_ig_diagnostics e JOIN social_accounts a ON a.id=e.account_id
+             ORDER BY e.id DESC LIMIT %s""",(limit,))
+        return c.fetchall()
 
 def cipher():
     key=os.environ.get("INSTAGRAM_ENCRYPTION_KEY","")
@@ -49,16 +75,27 @@ def proxy_for_account(db,account_id:int):
     return row["proxy_id"],f"http://{authority}{row['host']}:{row['port']}"
 
 def failure_reason(exc):
+    """Classify without exposing exception text or triggering automatic retries."""
     name=type(exc).__name__
-    if name in ("TwoFactorRequired","ChallengeRequired","ChallengeError","ChallengeUnknownStep"):
-        return "needs_verification","Instagram exige verificação. Resolva pelo aplicativo e tente novamente."
-    if name in ("FeedbackRequired","PleaseWaitFewMinutes","RateLimitError","ClientThrottledError"):
-        return "paused","Instagram limitou o acesso. Aguarde e evite novas tentativas."
-    if name in ("BadPassword","LoginRequired","ClientLoginRequired","ClientError","ClientLoginError"):
-        return "failed","Instagram recusou o login. Confira credenciais e aprovações no aplicativo."
-    if isinstance(exc,(ConnectionError,TimeoutError,OSError)):
-        return "paused","Falha de conexão. Confira a disponibilidade do proxy fixo."
-    return "failed","Falha na autenticação. Consulte o aplicativo Instagram antes de tentar novamente."
+    if name in ("TwoFactorRequired","ChallengeRequired","ChallengeError",
+                "ChallengeUnknownStep","CheckpointRequired","ConsentRequired"):
+        return "needs_verification","Instagram exige confirmação. Confira o aplicativo antes de tentar novamente."
+    if name in ("FeedbackRequired","PleaseWaitFewMinutes","RateLimitError",
+                "ClientThrottledError","ClientForbiddenError","ClientUnauthorizedError",
+                "ClientUnpredictableError"):
+        return "paused","Instagram limitou ou recusou o acesso. Não tente novamente em massa."
+    if name in ("BadPassword","IncorrectPassword","InvalidCredentials",
+                "UserNotFound","UserNotFoundError"):
+        return "failed","Credenciais ou usuário recusados. Confira o login no aplicativo Instagram."
+    if name in ("ProxyError","InvalidProxy","ProxyConnectionError","ConnectTimeout",
+                "ReadTimeout","Timeout","SSLError","ClientConnectionError",
+                "ClientRequestTimeout","ConnectionError") or isinstance(exc, (ConnectionError,TimeoutError,OSError)):
+        return "paused","Falha de conexão com Instagram pelo proxy fixo. Verifique rede e proxy sem forçar login."
+    if name in ("ClientJSONDecodeError","JSONDecodeError","ClientLoginError",
+                "ClientError","ClientBadRequestError","ClientUnknownError",
+                "ValueError","KeyError"):
+        return "paused","Resposta inesperada do Instagram ou incompatibilidade da API privada. Verifique diagnóstico técnico."
+    return "paused","Falha de origem não identificada. Tentativas pausadas; consulte o diagnóstico técnico."
 
 def allowed(request,csrf):
     from app.main import admin, form_allowed
@@ -136,6 +173,7 @@ def connect(request:Request, account_id:int, csrf:str=Form(...),
                                account_id,status,type(exc).__name__)
                 with db.cursor() as c:
                     c.execute("UPDATE social_accounts SET status=%s WHERE id=%s",(status,account_id))
+                record_failure(db,account_id,exc,"connect",status)
                 db.commit()
                 return go(message)
     except Exception as exc:
@@ -200,6 +238,7 @@ def check_account(request:Request,account_id:int,csrf:str=Form(...)):
         with db_connection() as db:
             with db.cursor() as c:
                 c.execute("UPDATE social_accounts SET status=%s WHERE id=%s",(status,account_id))
+            record_failure(db,account_id,exc,"check",status)
             db.commit()
         return JSONResponse({"status":status,"message":message})
 
