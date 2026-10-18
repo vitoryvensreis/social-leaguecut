@@ -20,6 +20,9 @@ class MonitoringOnlyTests(unittest.TestCase):
                     found.update(flatten(route.routes,path))
             return found
         paths=flatten(app.routes)
+        print('DEBUG ROOT ROUTES',[(type(r).__name__,getattr(r,'path',None),getattr(r,'name',None)) for r in app.routes])
+        from app.monitor import router as mr
+        print('DEBUG MONITOR ROUTES',[(type(r).__name__,getattr(r,'path',None)) for r in mr.routes])
         for path in ("/","/login","/logout","/reports/publications.csv",
                      "/api/motor/accounts","/api/motor/jobs/claim",
                      "/drive/connect","/drive/callback",
