@@ -47,7 +47,7 @@ class DailyCampaignTests(unittest.TestCase):
             self.assertEqual(len(minutes),16)
             self.assertEqual(len(set(minutes)),16)
             ordered=sorted(minutes)
-            self.assertEqual(ordered,list(range(600,1081,30)))
+            self.assertEqual(ordered,list(range(600,1051,30)))
             self.assertTrue(all(b-a==30 for a,b in zip(ordered,ordered[1:])))
         for captions_for_account in by_account.values():
             self.assertEqual(set(captions_for_account[:3]),set(captions))
