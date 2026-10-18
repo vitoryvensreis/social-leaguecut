@@ -1,5 +1,5 @@
 """Google Drive OAuth and controlled media import."""
-import os, io, re, secrets, logging
+import os, io, re, secrets, logging, json
 from oauthlib.oauth2.rfc6749.errors import OAuth2Error
 from pathlib import Path
 from urllib.parse import quote
@@ -8,6 +8,9 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+from googleapiclient.errors import HttpError
+from google.auth.exceptions import RefreshError
+from cryptography.fernet import InvalidToken
 from google.oauth2.credentials import Credentials
 from cryptography.fernet import Fernet
 
@@ -114,20 +117,71 @@ def callback(request:Request,code:str="",state:str="",error:str=""):
             return go("Google Drive: falha ao trocar autorização por token ("+category+"). Refazer conexão.")
         return go("Google Drive: autorização recebida, mas erro ao salvar no MySQL ("+category+").")
 
+def drive_error_message(exc, stage):
+    """Return a safe public diagnostic without showing tokens or raw Google responses."""
+    if isinstance(exc, InvalidToken):
+        return "A chave local de criptografia mudou. Reconecte o Google Drive."
+    if isinstance(exc, RefreshError):
+        return "A autorização Google expirou ou foi revogada. Clique em Conectar Google Drive."
+    if isinstance(exc, HttpError):
+        status=int(getattr(exc.resp, "status", 0))
+        reasons=set()
+        try:
+            body=json.loads(exc.content.decode("utf-8"))
+            root=body.get("error", {})
+            reasons.update(x.get("reason","") for x in root.get("errors",[]) if isinstance(x,dict))
+            reasons.update(d.get("reason","") for d in root.get("details",[]) if isinstance(d,dict))
+            status_name=root.get("status","")
+        except (ValueError,UnicodeError,AttributeError,TypeError):
+            status_name=""
+        if "SERVICE_DISABLED" in reasons or "accessNotConfigured" in reasons:
+            return "Google Drive API desativada no projeto Google Cloud. Ative a Drive API e tente novamente."
+        if status==403 and "insufficientPermissions" in reasons:
+            return "A conta Google não autorizou a leitura do Drive. Reconecte e confirme as permissões."
+        if status in (401,403) and status_name=="PERMISSION_DENIED":
+            return "O Google negou acesso ao Drive (HTTP 403). Confira a API ativada e os escopos OAuth."
+        if status==401:
+            return "O Google recusou o token (HTTP 401). Reconecte o Drive."
+        if status==403:
+            return "O Google recusou a consulta (HTTP 403). Confirme que a Drive API está ativada e autorizada."
+        if status==429:
+            return "Limite de solicitações da API do Google atingido. Aguarde antes de tentar novamente."
+        if status>=500:
+            return "Google Drive indisponível temporariamente (HTTP "+str(status)+")."
+        return "Falha na API do Google Drive (HTTP "+str(status)+")."
+    if stage in ("open_database", "read_tokens", "save_tokens") and exc.__class__.__module__.startswith("pymysql"):
+        return "Erro ao acessar os dados OAuth no MySQL. Confira a conexão e permissões."
+    return "Não foi possível listar o Drive (etapa: "+stage+"). Consulte os logs do serviço."
+
 @router.get("/drive/files")
 def files(request:Request):
     from app.main import admin,db_connection
-    if not admin(request):return JSONResponse({"error":"Forbidden"},403)
+    if not admin(request):
+        return JSONResponse({"error":"Forbidden"},status_code=403)
+    stage="open_database"
     try:
         with db_connection() as db:
+            stage="read_tokens"
             c=creds(db)
-            if not c:return JSONResponse({"files":[],"connected":False})
+            if not c:
+                return JSONResponse({"files":[],"connected":False})
+            stage="build_client"
             api=build("drive","v3",credentials=c,cache_discovery=False)
-            data=api.files().list(q="trashed = false and (mimeType = 'video/mp4' or mimeType = 'video/quicktime')",fields="nextPageToken,files(id,name,mimeType,size)",page_size=100).execute()
+            stage="list_files"
+            data=api.files().list(
+                q="trashed = false and (mimeType = 'video/mp4' or mimeType = 'video/quicktime')",
+                fields="nextPageToken,files(id,name,mimeType,size)",
+                pageSize=100,
+            ).execute()
+            stage="save_tokens"
             store(db,c)
-        return JSONResponse({"files":data.get("files",[]),"connected":True})
-    except Exception:
-        return JSONResponse({"error":"Drive indisponível ou sessão expirada"},503)
+        return JSONResponse({"files":data.get("files",[]),"connected":True,"more":bool(data.get("nextPageToken"))})
+    except Exception as exc:
+        logger.warning("Drive file list failed stage=%s error=%s",stage,type(exc).__name__)
+        return JSONResponse(
+            {"error":drive_error_message(exc,stage),"stage":stage,"connected":stage!="read_tokens"},
+            status_code=503,
+        )
 
 @router.post("/drive/import")
 def import_file(request:Request,csrf:str=Form(...),file_id:str=Form(...)):
