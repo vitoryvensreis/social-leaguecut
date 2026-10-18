@@ -141,7 +141,9 @@ def build_plan(accounts: list[int], asset_ids: list[str], start: date, at: time,
     if not 1 <= days <= DAYS:
         raise ValueError("Unsupported duration")
     if end_at is None:
-        end_at=time(min(23,at.hour+2),at.minute)
+        # Backwards-compatible planner default; configured campaigns use explicit window.
+        end_minutes=min(23*60+59,at.hour*60+at.minute+9*60)
+        end_at=time(end_minutes//60,end_minutes%60)
     unique_assets=list(dict.fromkeys(asset_ids))
     captions=list(dict.fromkeys(captions or [""]))
     rng=secrets.SystemRandom()
