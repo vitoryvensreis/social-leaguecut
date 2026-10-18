@@ -16,7 +16,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.proxies import router as proxies_router, available as get_proxies
 from app.routing import router as routing_router, list_routes, preview, auto_assign_proxy
 from app.drive import router as drive_router
-from app.campaign import router as campaign_router, settings as campaign_settings, summary as campaign_summary
+from app.campaign import router as campaign_router, settings as campaign_settings, summary as campaign_summary, stored_captions, mysql_clock
+from app.instagram import router as instagram_router, init as init_instagram
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
@@ -26,6 +27,7 @@ app.include_router(proxies_router)
 app.include_router(routing_router)
 app.include_router(drive_router)
 app.include_router(campaign_router)
+app.include_router(instagram_router)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET") or "SET_SESSION_SECRET_IN_ENV_BEFORE_LOGIN", https_only=True, same_site="lax")
 
 def db_connection():
@@ -115,6 +117,10 @@ def home(request:Request):
                 data["campaign_summary"]=campaign_summary(db)
         except Exception:
             data["error"]="Não foi possível consultar o planejamento da campanha."
+    data["campaign_captions_text"]="\n---\n".join(stored_captions(data["campaign"]))
+    data["campaign_start_time"]=mysql_clock(data["campaign"]["start_time"]).strftime("%H:%M") if data["campaign"] else "10:00"
+    data["campaign_end_time"]=mysql_clock(data["campaign"]["end_time"]).strftime("%H:%M") if data["campaign"] else "19:00"
+    data["instagram_enabled"]=bool(os.getenv("INSTAGRAM_ENCRYPTION_KEY"))
     return templates.TemplateResponse(request,"index.html",data)
 
 @app.post("/login")

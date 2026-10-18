@@ -6,6 +6,7 @@ credentials. Planned jobs stay inert until a separately approved publisher runs.
 import logging
 import re
 import secrets
+import json
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from urllib.parse import quote, urlparse
@@ -56,7 +57,50 @@ def init(db):
           UNIQUE KEY once_per_account_day(account_id,local_day),
           INDEX idx_due(status,planned_utc)
         )""")
+    with db.cursor() as c:
+        c.execute("SHOW COLUMNS FROM social_campaign_settings")
+        cols={row["Field"] for row in c.fetchall()}
+        if "captions_json" not in cols:
+            c.execute("ALTER TABLE social_campaign_settings ADD COLUMN captions_json MEDIUMTEXT NULL")
+        if "end_time" not in cols:
+            c.execute("ALTER TABLE social_campaign_settings ADD COLUMN end_time TIME NOT NULL DEFAULT '19:00:00'")
     db.commit()
+
+def split_captions(value: str) -> list[str]:
+    """Separate complete, optionally multiline captions with a line containing ---."""
+    captions=[part.strip() for part in re.split(r"(?m)^\s*---\s*$",value) if part.strip()]
+    if not 1 <= len(captions) <= 30 or any(len(c)>2200 for c in captions):
+        raise ValueError("Informe entre 1 e 30 legendas de até 2200 caracteres, separadas por ---")
+    return captions
+
+def stored_captions(config) -> list[str]:
+    if not config:
+        return []
+    try:
+        variants=json.loads(config.get("captions_json") or "[]")
+        if isinstance(variants,list) and variants and all(isinstance(v,str) and v for v in variants):
+            return variants
+    except (ValueError,TypeError):
+        pass
+    return [config["caption"]] if config.get("caption") else []
+
+def mysql_clock(t):
+    if isinstance(t,timedelta):
+        seconds=int(t.total_seconds())
+        return time(hour=(seconds//3600)%24,minute=(seconds//60)%60)
+    return t
+
+def schedule_offsets(account_count:int, start:time, end:time, rng) -> list[int]:
+    minutes=(end.hour*60+end.minute)-(start.hour*60+start.minute)
+    if minutes <= 0 or minutes > 1439:
+        raise ValueError("Janela de horários inválida")
+    # Keep distinct assignments apart across accounts and vary each day.
+    minimum_gap=12 if account_count <= 20 else 5
+    if minutes < (account_count-1)*minimum_gap:
+        raise ValueError("Janela pequena para a quantidade de perfis")
+    slack=minutes-(account_count-1)*minimum_gap
+    samples=sorted(rng.randrange(slack+1) for _ in range(account_count))
+    return [i*minimum_gap+samples[i] for i in range(account_count)]
 
 def settings(db):
     init(db)
@@ -85,66 +129,82 @@ def authorized(request,csrf):
 def go(message):
     return RedirectResponse("/?error="+quote(message), status_code=303)
 
-def build_plan(accounts: list[int], asset_ids: list[str], start: date, at: time, days: int = DAYS) -> list[tuple]:
-    """Each account receives its own shuffled cycle; no repeats before cycle exhaustion.
+def build_plan(accounts: list[int], asset_ids: list[str], start: date, at: time,
+               days: int = DAYS, captions: list[str] | None = None,
+               end_at: time | None = None) -> list[tuple]:
+    """One unique time/account/day, independent shuffled video and caption cycles.
 
-    Daily post times are spread across two hours beginning at the chosen time.
-    The planner does not dispatch requests to Instagram.
+    Schedules all posts within the chosen local time window. No publishing.
     """
     if not accounts or not asset_ids:
         return []
     if not 1 <= days <= DAYS:
         raise ValueError("Unsupported duration")
+    if end_at is None:
+        # Backwards-compatible planner default; configured campaigns use explicit window.
+        end_minutes=min(23*60+59,at.hour*60+at.minute+9*60)
+        end_at=time(end_minutes//60,end_minutes%60)
     unique_assets=list(dict.fromkeys(asset_ids))
+    captions=list(dict.fromkeys(captions or [""]))
     rng=secrets.SystemRandom()
-    assignments={account_id: [] for account_id in accounts}
+    video_rotations={}
+    caption_rotations={}
     for account_id in accounts:
+        video_rotations[account_id]=[]
+        caption_rotations[account_id]=[]
         for offset in range(days):
             if offset % len(unique_assets)==0:
-                cycle=unique_assets[:]
-                rng.shuffle(cycle)
-            assignments[account_id].append(cycle[offset % len(unique_assets)])
+                video_cycle=unique_assets[:]
+                rng.shuffle(video_cycle)
+            if offset % len(captions)==0:
+                caption_cycle=captions[:]
+                rng.shuffle(caption_cycle)
+            video_rotations[account_id].append(video_cycle[offset%len(unique_assets)])
+            caption_rotations[account_id].append(caption_cycle[offset%len(captions)])
     rows=[]
     for offset in range(days):
-        day=start + timedelta(days=offset)
+        day=start+timedelta(days=offset)
         order=accounts[:]
         rng.shuffle(order)
-        # Stagger one post per account over a two-hour daily window.
-        spacing=max(1, 120 // max(1,len(order)))
-        for slot,account_id in enumerate(order):
-            local_dt=datetime.combine(day,at,tzinfo=TZ)+timedelta(minutes=slot*spacing)
-            rows.append((account_id,assignments[account_id][offset],local_dt.date(),local_dt.astimezone(timezone.utc).replace(tzinfo=None)))
+        offsets=schedule_offsets(len(order),at,end_at,rng)
+        for minute_offset,account_id in zip(offsets,order):
+            local_dt=datetime.combine(day,at,tzinfo=TZ)+timedelta(minutes=minute_offset)
+            rows.append((account_id,video_rotations[account_id][offset],local_dt.date(),
+                         local_dt.astimezone(timezone.utc).replace(tzinfo=None),
+                         caption_rotations[account_id][offset]))
     return rows
 
 @router.post("/campaign/settings")
 def save_settings(request: Request, csrf: str=Form(...), folder_url: str=Form(...),
-                  caption: str=Form(""), start_date: str=Form(...), start_time: str=Form(...)):
+                  captions_text: str=Form(...), start_date: str=Form(...),
+                  start_time: str=Form("10:00"), end_time: str=Form("19:00")):
     if not authorized(request,csrf):
         return JSONResponse({"error":"Forbidden"},status_code=403)
     folder=folder_id_from_input(folder_url)
     try:
         day=date.fromisoformat(start_date)
         at=time.fromisoformat(start_time)
-    except ValueError:
-        return go("Data ou horário inválidos")
+        until=time.fromisoformat(end_time)
+        captions=split_captions(captions_text)
+        schedule_offsets(16,at,until,secrets.SystemRandom())
+    except ValueError as exc:
+        return go("Horários ou legendas inválidos. Use separador --- e deixe janela suficiente para 16 contas.")
     now=datetime.now(TZ)
-    if not folder or len(caption)>2200 or day<now.date():
-        return go("Confira pasta, legenda e data da campanha")
-    if at.hour>21 or (at.hour==21 and at.minute>30):
-        return go("Escolha um horário até 21:30 para manter todos os posts no mesmo dia.")
-    if day==now.date() and datetime.combine(day,at,tzinfo=TZ)<=now:
-        return go("O horário escolhido para hoje já passou. Escolha outro horário ou comece amanhã.")
+    if not folder or day<now.date() or day==now.date() and datetime.combine(day,at,tzinfo=TZ)<=now:
+        return go("Confira o link da pasta e escolha uma data/horário futuros.")
     from app.main import db_connection
     with db_connection() as db:
         init(db)
         with db.cursor() as c:
-            c.execute("""INSERT INTO social_campaign_settings(id,folder_id,caption,start_date,start_time,days)
-            VALUES(1,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
-            folder_id=VALUES(folder_id),caption=VALUES(caption),
-            start_date=VALUES(start_date),start_time=VALUES(start_time),days=VALUES(days)""",
-                (folder,caption,day,at,DAYS))
+            c.execute("""INSERT INTO social_campaign_settings(id,folder_id,caption,captions_json,
+                  start_date,start_time,end_time,days)
+                VALUES(1,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
+                  folder_id=VALUES(folder_id),caption=VALUES(caption),
+                  captions_json=VALUES(captions_json),start_date=VALUES(start_date),
+                  start_time=VALUES(start_time),end_time=VALUES(end_time),days=VALUES(days)""",
+                (folder,captions[0],json.dumps(captions,ensure_ascii=False),day,at,until,DAYS))
         db.commit()
-    return go("Configuração da campanha salva. Sincronize a pasta antes de gerar a programação.")
+    return go(f"Campanha salva: {len(captions)} legendas e publicações distribuídas entre {at.strftime('%H:%M')} e {until.strftime('%H:%M')}.")
 
 @router.post("/campaign/sync")
 def sync_folder(request: Request, csrf: str=Form(...)):
@@ -217,16 +277,21 @@ def generate(request: Request, csrf: str=Form(...)):
             return go("Cadastre de 1 a 16 contas para planejar a campanha.")
         if not assets:
             return go("Sincronize primeiro uma pasta que contenha vídeos.")
-        at=config["start_time"]
-        if isinstance(at,timedelta):
-            seconds=int(at.total_seconds())
-            at=time(hour=(seconds//3600)%24,minute=(seconds//60)%60)
-        rows=build_plan(accounts,assets,config["start_date"],at,DAYS)
+        at=mysql_clock(config["start_time"])
+        until=mysql_clock(config["end_time"])
+        try:
+            rows=build_plan(accounts,assets,config["start_date"],at,DAYS,
+                            captions=stored_captions(config),end_at=until)
+        except ValueError:
+            return go("Horários inválidos para distribuir as contas.")
         with db.cursor() as c:
-            for account_id,drive_id,day,due in rows:
-                c.execute("""INSERT IGNORE INTO social_daily_jobs(account_id,drive_id,local_day,planned_utc,caption,status)
-                VALUES(%s,%s,%s,%s,%s,'planned')""",
-                    (account_id,drive_id,day,due,config["caption"]))
-            created=c.rowcount
+            for account_id,drive_id,day,due,caption in rows:
+                c.execute("""INSERT INTO social_daily_jobs(account_id,drive_id,local_day,planned_utc,caption,status)
+                VALUES(%s,%s,%s,%s,%s,'planned')
+                ON DUPLICATE KEY UPDATE
+                  drive_id=IF(status='planned',VALUES(drive_id),drive_id),
+                  planned_utc=IF(status='planned',VALUES(planned_utc),planned_utc),
+                  caption=IF(status='planned',VALUES(caption),caption)""",
+                    (account_id,drive_id,day,due,caption))
         db.commit()
     return go(f"Programação gerada: até {len(rows)} itens. Duplicatas do mesmo dia foram ignoradas. Publicador ainda desligado.")
