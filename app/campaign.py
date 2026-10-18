@@ -294,13 +294,13 @@ def generate(request: Request, csrf: str=Form(...)):
         except ValueError:
             return go("A janela é curta para todas as contas com intervalo de 30 minutos; aumente o horário final.")
         with db.cursor() as c:
+            # A deliberate "Gerar programação" replaces only pending drafts.
+            # Published, publishing and needs_review jobs remain untouched.
+            c.execute("DELETE FROM social_daily_jobs WHERE status='planned'")
             for account_id,drive_id,day,due,caption in rows:
-                c.execute("""INSERT INTO social_daily_jobs(account_id,drive_id,local_day,planned_utc,caption,status)
-                VALUES(%s,%s,%s,%s,%s,'planned')
-                ON DUPLICATE KEY UPDATE
-                  drive_id=IF(status='planned',VALUES(drive_id),drive_id),
-                  planned_utc=IF(status='planned',VALUES(planned_utc),planned_utc),
-                  caption=IF(status='planned',VALUES(caption),caption)""",
+                c.execute("""INSERT IGNORE INTO social_daily_jobs
+                    (account_id,drive_id,local_day,planned_utc,caption,status)
+                    VALUES(%s,%s,%s,%s,%s,'planned')""",
                     (account_id,drive_id,day,due,caption))
         db.commit()
-    return go(f"Programação gerada: até {len(rows)} itens. Duplicatas do mesmo dia foram ignoradas. Publicador ainda desligado.")
+    return go(f"Programação recalculada em intervalos de 30 minutos: até {len(rows)} horários. Publicações concluídas preservadas.")
