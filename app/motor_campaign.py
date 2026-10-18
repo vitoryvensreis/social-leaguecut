@@ -146,6 +146,15 @@ def sync_drive(authorization:str|None=Header(default=None)):
         return {"status":"synced","videos":len(files),"folder":meta.get("name","")}
     except HTTPException:
         raise
+    except ValueError as exc:
+        if stage=="read_google_credentials" and not (
+            __import__("os").environ.get("GOOGLE_TOKEN_ENCRYPTION_KEY")
+            or __import__("os").environ.get("PROXY_ENCRYPTION_KEY")
+        ):
+            logger.warning("Drive sync missing OAuth encryption key")
+            raise HTTPException(409,detail="Falta a chave que protege o token Google Drive na VPS. Restaure a chave original PROXY_ENCRYPTION_KEY ou configure GOOGLE_TOKEN_ENCRYPTION_KEY com o mesmo valor.")
+        logger.warning("Drive sync failure stage=%s error_class=%s",stage,type(exc).__name__)
+        raise HTTPException(503,detail=f"Erro no Drive na etapa {stage}. Consulte os logs da VPS.")
     except (RefreshError, InvalidToken) as exc:
         logger.warning("Drive sync failure stage=%s error_class=%s",stage,type(exc).__name__)
         raise HTTPException(409,detail="A autorização Google expirou ou as credenciais locais ficaram inválidas. Reconecte o Google Drive pelo site.")
