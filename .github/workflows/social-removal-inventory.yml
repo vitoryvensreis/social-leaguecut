@@ -1,0 +1,68 @@
+name: Inspect Social LeagueCut removal scope
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/social-removal-inventory.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Inspect dedicated site and schema (read-only)
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          DEPLOY_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          port="${VPS_PORT:-22}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
+              -p "$port" "$VPS_USER@$VPS_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          target=/home/leaguecut-social-motor/htdocs/social.leaguecut.com.br
+          test "$(id -un)" = leaguecut-social-motor
+          test -f "$target/.env"
+          test -x "$target/.venv/bin/python"
+          echo "PROJECT_PATH_PRESENT=yes"
+          if sudo -n -l /usr/bin/systemctl stop social-leaguecut.service >/dev/null 2>&1; then
+            echo "SERVICE_STOP_SUDO_PERMITTED=yes"
+          else
+            echo "SERVICE_STOP_SUDO_PERMITTED=no"
+          fi
+          cd "$target"
+          .venv/bin/python - <<'PY'
+          import os,re,pymysql
+          from dotenv import load_dotenv
+          load_dotenv(".env")
+          name=os.environ.get("DB_NAME","")
+          safe=bool(re.fullmatch(r"[A-Za-z0-9_]{1,64}",name))
+          dedicated=bool(re.search(r"social|leaguecut",name,re.I))
+          print("DB_NAME_VALID=",safe)
+          print("DB_NAME_RESEMBLES_SOCIAL=",dedicated)
+          if not safe: raise SystemExit("Unsafe database name")
+          connection=pymysql.connect(
+            host=os.environ.get("DB_HOST","localhost"),port=int(os.environ.get("DB_PORT","3306")),
+            user=os.environ["DB_USER"],password=os.environ["DB_PASSWORD"],
+            database=name,read_timeout=7,connect_timeout=5)
+          with connection:
+            with connection.cursor() as c:
+              c.execute("SHOW FULL TABLES")
+              objects=c.fetchall()
+          print("DB_OBJECT_COUNT=",len(objects))
+          print("NON_SOCIAL_OBJECT_COUNT=",sum(1 for t in objects if not t[0].startswith("social_")))
+          print("SOCIAL_OBJECT_COUNT=",sum(1 for t in objects if t[0].startswith("social_")))
+          PY
+          REMOTE
