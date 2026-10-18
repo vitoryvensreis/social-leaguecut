@@ -12,6 +12,7 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from app.campaign import init as init_campaign
 from app.insights import init as init_insights
+from app.drive import init as init_drive
 
 router=APIRouter()
 TZ=ZoneInfo("America/Fortaleza")
@@ -27,6 +28,7 @@ SNAPSHOT_JOIN="""LEFT JOIN (
 def prepared(db):
     init_campaign(db)
     init_insights(db)
+    init_drive(db)
 
 def to_local(dt):
     return dt.replace(tzinfo=timezone.utc).astimezone(TZ).strftime("%d/%m/%Y %H:%M") if dt else "—"
@@ -45,6 +47,8 @@ def report(db):
     """All counts reflect persisted jobs; no invented reach or view values."""
     prepared(db)
     with db.cursor() as c:
+        c.execute("SELECT COUNT(*) AS n FROM social_daily_jobs WHERE status='planned' AND planned_utc<UTC_TIMESTAMP()")
+        overdue=c.fetchone()["n"]
         c.execute("SELECT COUNT(*) AS n FROM social_accounts")
         account_count=c.fetchone()["n"]
         c.execute("SELECT status,COUNT(*) AS n FROM social_daily_jobs GROUP BY status")
@@ -105,7 +109,8 @@ def report(db):
         "statuses":statuses,"account_status":account_status,
         "totals":known,"accounts":accounts,"upcoming":upcoming,
         "history":history,"daily":daily,
-        "needs_attention":sum(statuses.get(s,0) for s in ("missed","needs_review","failed")),
+        "overdue":overdue,
+        "needs_attention":overdue+sum(statuses.get(s,0) for s in ("missed","needs_review","failed")),
     }
 
 def csv_cell(v):
