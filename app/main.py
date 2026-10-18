@@ -14,12 +14,14 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from app.proxies import router as proxies_router, available as get_proxies
+from app.routing import router as routing_router, list_routes, preview
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 templates = Jinja2Templates(directory=str(ROOT / "app" / "templates"))
 app = FastAPI(title="Social LeagueCut", docs_url=None, redoc_url=None)
 app.include_router(proxies_router)
+app.include_router(routing_router)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET") or "SET_SESSION_SECRET_IN_ENV_BEFORE_LOGIN", https_only=True, same_site="lax")
 
 def db_connection():
@@ -90,6 +92,15 @@ def home(request:Request):
                 data["proxies"]=get_proxies(db)
         except Exception:
             data["error"]="Não foi possível consultar proxies"
+    data["routes"]=[]
+    data["queue_preview"]=[]
+    if admin(request):
+        try:
+            with db_connection() as db:
+                data["routes"]=list_routes(db)
+                data["queue_preview"]=preview(db)
+        except Exception:
+            data["error"]="Não foi possível consultar a distribuição entre contas e proxies"
     return templates.TemplateResponse(request,"index.html",data)
 
 @app.post("/login")
