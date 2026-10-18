@@ -127,8 +127,13 @@ def save_settings(request: Request, csrf: str=Form(...), folder_url: str=Form(..
         at=time.fromisoformat(start_time)
     except ValueError:
         return go("Data ou horário inválidos")
-    if not folder or len(caption)>2200 or day<datetime.now(TZ).date():
+    now=datetime.now(TZ)
+    if not folder or len(caption)>2200 or day<now.date():
         return go("Confira pasta, legenda e data da campanha")
+    if at.hour>21 or (at.hour==21 and at.minute>30):
+        return go("Escolha um horário até 21:30 para manter todos os posts no mesmo dia.")
+    if day==now.date() and datetime.combine(day,at,tzinfo=TZ)<=now:
+        return go("O horário escolhido para hoje já passou. Escolha outro horário ou comece amanhã.")
     from app.main import db_connection
     with db_connection() as db:
         init(db)
