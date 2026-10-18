@@ -41,11 +41,16 @@ def read_settings(authorization:str|None=Header(default=None)):
     authorize(authorization)
     with db_conn() as db:
         config=settings(db)
-        with db.cursor() as c:
+        if config and config["folder_id"]==LOCAL_FOLDER:
             ensure_local_inventory(db)
-            c.execute("""SELECT COUNT(*) AS n FROM social_local_inventory""") if (config and config["folder_id"]==LOCAL_FOLDER) else c.execute(
-                "SELECT COUNT(*) AS n FROM social_drive_assets WHERE folder_id=%s",(config["folder_id"],)
-            ) if config else c.execute("SELECT 0 AS n")
+        with db.cursor() as c:
+            if not config:
+                c.execute("SELECT 0 AS n")
+            elif config["folder_id"]==LOCAL_FOLDER:
+                c.execute("SELECT COUNT(*) AS n FROM social_local_inventory")
+            else:
+                c.execute("SELECT COUNT(*) AS n FROM social_drive_assets WHERE folder_id=%s",
+                          (config["folder_id"],))
             assets=c.fetchone()["n"]
             c.execute("SELECT status,COUNT(*) AS n FROM social_daily_jobs GROUP BY status")
             statuses={r["status"]:r["n"] for r in c.fetchall()}
@@ -189,11 +194,12 @@ def generate_schedule(authorization:str|None=Header(default=None)):
             raise HTTPException(409,detail="Configure a campanha primeiro")
         if config["start_date"]<datetime.now(TZ).date():
             raise HTTPException(409,detail="Ajuste a data inicial para hoje ou depois")
+        if config["folder_id"]==LOCAL_FOLDER:
+            ensure_local_inventory(db)
         with db.cursor() as c:
             c.execute("SELECT id FROM social_accounts ORDER BY id")
             accounts=[r["id"] for r in c.fetchall()]
             if config["folder_id"]==LOCAL_FOLDER:
-                ensure_local_inventory(db)
                 c.execute("SELECT drive_id FROM social_local_inventory ORDER BY drive_id")
             else:
                 c.execute("SELECT drive_id FROM social_drive_assets WHERE folder_id=%s ORDER BY drive_id",(config["folder_id"],))
