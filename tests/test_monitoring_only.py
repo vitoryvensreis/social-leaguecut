@@ -14,7 +14,8 @@ class MonitoringOnlyTests(unittest.TestCase):
         paths={getattr(route,"path","") for route in app.routes}
         for path in ("/","/login","/logout","/reports/publications.csv",
                      "/api/motor/accounts","/api/motor/jobs/claim",
-                     "/drive/connect","/drive/callback"):
+                     "/drive/connect","/drive/callback",
+                     "/api/motor/campaign","/api/motor/campaign/generate"):
             self.assertIn(path,paths)
         for path in ("/proxy/test","/accounts","/posts",
                      "/campaign/settings","/campaign/generate",
