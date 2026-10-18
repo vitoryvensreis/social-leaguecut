@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from app.proxies import router as proxies_router, available as get_proxies
-from app.routing import router as routing_router, list_routes, preview
+from app.routing import router as routing_router, list_routes, preview, auto_assign_proxy
 from app.drive import router as drive_router
 from app.campaign import router as campaign_router, settings as campaign_settings, summary as campaign_summary
 
@@ -144,8 +144,13 @@ def add_account(request:Request,username:str=Form(...),csrf:str=Form(...)):
     try:
         with db_connection() as db:
             with db.cursor() as cur:
+                cur.execute("SELECT COUNT(*) AS n FROM social_accounts")
+                if cur.fetchone()["n"]>=16:
+                    return redirect("Limite de 16 contas atingido")
                 cur.execute("INSERT INTO social_accounts(username) VALUES(%s)",(name,))
+                account_id=cur.lastrowid
             db.commit()
+            auto_assign_proxy(db,account_id)
     except pymysql.err.IntegrityError:
         return redirect("Conta já cadastrada")
     return redirect()
