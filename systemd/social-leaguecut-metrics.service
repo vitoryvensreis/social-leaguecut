@@ -1,0 +1,14 @@
+[Unit]
+Description=Social LeagueCut daily Reel metrics
+Wants=network-online.target
+After=network-online.target mariadb.service
+
+[Service]
+Type=oneshot
+User=leaguecut-social-motor
+Group=leaguecut-social-motor
+WorkingDirectory=/home/leaguecut-social-motor/htdocs/social.leaguecut.com.br
+ExecStart=/home/leaguecut-social-motor/htdocs/social.leaguecut.com.br/.venv/bin/python -m app.insights
+TimeoutStartSec=20min
+NoNewPrivileges=true
+PrivateTmp=true

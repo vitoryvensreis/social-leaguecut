@@ -18,6 +18,8 @@ from app.routing import router as routing_router, list_routes, preview, auto_ass
 from app.drive import router as drive_router
 from app.campaign import router as campaign_router, settings as campaign_settings, summary as campaign_summary, stored_captions, mysql_clock
 from app.instagram import router as instagram_router, init as init_instagram
+from app.bulk import router as bulk_router
+from app.insights import router as insights_router, dashboard as insights_dashboard
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
@@ -28,6 +30,8 @@ app.include_router(routing_router)
 app.include_router(drive_router)
 app.include_router(campaign_router)
 app.include_router(instagram_router)
+app.include_router(bulk_router)
+app.include_router(insights_router)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET") or "SET_SESSION_SECRET_IN_ENV_BEFORE_LOGIN", https_only=True, same_site="lax")
 
 def db_connection():
@@ -121,6 +125,13 @@ def home(request:Request):
     data["campaign_start_time"]=mysql_clock(data["campaign"]["start_time"]).strftime("%H:%M") if data["campaign"] else "10:00"
     data["campaign_end_time"]=mysql_clock(data["campaign"]["end_time"]).strftime("%H:%M") if data["campaign"] else "19:00"
     data["instagram_enabled"]=bool(os.getenv("INSTAGRAM_ENCRYPTION_KEY"))
+    data["insights"]={"rows":[],"published":0,"last_known_views":0}
+    if admin(request):
+        try:
+            with db_connection() as db:
+                data["insights"]=insights_dashboard(db)
+        except Exception:
+            data["error"]="Não foi possível consultar o histórico de postagens."
     return templates.TemplateResponse(request,"index.html",data)
 
 @app.post("/login")
@@ -150,9 +161,6 @@ def add_account(request:Request,username:str=Form(...),csrf:str=Form(...)):
     try:
         with db_connection() as db:
             with db.cursor() as cur:
-                cur.execute("SELECT COUNT(*) AS n FROM social_accounts")
-                if cur.fetchone()["n"]>=16:
-                    return redirect("Limite de 16 contas atingido")
                 cur.execute("INSERT INTO social_accounts(username) VALUES(%s)",(name,))
                 account_id=cur.lastrowid
             db.commit()
