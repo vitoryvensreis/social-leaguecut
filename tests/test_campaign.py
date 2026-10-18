@@ -13,7 +13,7 @@ class DailyCampaignTests(unittest.TestCase):
     def test_16_accounts_get_one_daily_post_without_repeat(self):
         accounts=list(range(1,17))
         assets=["video"+str(i) for i in range(30)]
-        rows=build_plan(accounts,assets,date(2026,10,19),time(17,0),30)
+        rows=build_plan(accounts,assets,date(2026,10,19),time(10,0),30)
         self.assertEqual(len(rows),480)
         pairs=set()
         per_account=defaultdict(list)
@@ -47,9 +47,36 @@ class DailyCampaignTests(unittest.TestCase):
             self.assertEqual(len(minutes),16)
             self.assertEqual(len(set(minutes)),16)
             ordered=sorted(minutes)
-            self.assertTrue(all(b-a>=12 for a,b in zip(ordered,ordered[1:])))
+            self.assertEqual(ordered,list(range(600,1081,30)))
+            self.assertTrue(all(b-a==30 for a,b in zip(ordered,ordered[1:])))
         for captions_for_account in by_account.values():
             self.assertEqual(set(captions_for_account[:3]),set(captions))
+
+    def test_not_enough_slots_never_schedules_overlaps(self):
+        from app.campaign import schedule_offsets
+        import secrets
+        with self.assertRaises(ValueError):
+            schedule_offsets(20,time(10,0),time(19,0),secrets.SystemRandom())
+        self.assertEqual(schedule_offsets(16,time(10,0),time(19,0),secrets.SystemRandom()),
+                         [index*30 for index in range(16)])
+
+    def test_daily_orders_change_but_each_account_has_exactly_one_post(self):
+        from datetime import timezone
+        from zoneinfo import ZoneInfo
+        rows=build_plan(list(range(1,17)),["A","B","C"],date(2026,10,19),
+                        time(10,0),10,captions=["Legenda A","Legenda B"],
+                        end_at=time(19,0))
+        by_day=defaultdict(set)
+        per_account=defaultdict(set)
+        for account_id,video,day,utc,caption in rows:
+            local=utc.replace(tzinfo=timezone.utc).astimezone(ZoneInfo("America/Fortaleza"))
+            self.assertNotIn(account_id,by_day[day])
+            by_day[day].add(account_id)
+            self.assertNotIn(day,per_account[account_id])
+            per_account[account_id].add(day)
+            self.assertEqual(local.minute%30,0)
+        self.assertEqual(len(by_day),10)
+        self.assertTrue(all(len(users)==16 for users in by_day.values()))
 
     def test_multiline_caption_separator(self):
         from app.campaign import split_captions
