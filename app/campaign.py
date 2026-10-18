@@ -91,16 +91,25 @@ def mysql_clock(t):
     return t
 
 def schedule_offsets(account_count:int, start:time, end:time, rng) -> list[int]:
-    minutes=(end.hour*60+end.minute)-(start.hour*60+start.minute)
-    if minutes <= 0 or minutes > 1439:
-        raise ValueError("Janela de horários inválida")
-    # Keep distinct assignments apart across accounts and vary each day.
-    minimum_gap=12 if account_count <= 20 else 5
-    if minutes < (account_count-1)*minimum_gap:
-        raise ValueError("Janela pequena para a quantidade de perfis")
-    slack=minutes-(account_count-1)*minimum_gap
-    samples=sorted(rng.randrange(slack+1) for _ in range(account_count))
-    return [i*minimum_gap+samples[i] for i in range(account_count)]
+    """One exact 30-minute slot per account.
+
+    Accounts are shuffled independently every day in build_plan, so the same
+    account need not post at the same hour every day. Start 10:00 + 16
+    accounts -> last slot 17:30. Extra accounts can use later slots only
+    when the selected daily window has room.
+    """
+    if account_count < 1:
+        return []
+    window=(end.hour*60+end.minute)-(start.hour*60+start.minute)
+    if window < 0 or window >= 1440:
+        raise ValueError("Janela diária inválida")
+    required=(account_count-1)*30
+    if required>window:
+        raise ValueError(
+            f"{account_count} contas precisam de {required//60}h{required%60:02d} "
+            "de janela para intervalos exatos de 30 minutos."
+        )
+    return [index*30 for index in range(account_count)]
 
 def settings(db):
     init(db)
@@ -188,7 +197,7 @@ def save_settings(request: Request, csrf: str=Form(...), folder_url: str=Form(..
         captions=split_captions(captions_text)
         schedule_offsets(16,at,until,secrets.SystemRandom())
     except ValueError as exc:
-        return go("Horários ou legendas inválidos. Use separador --- e deixe janela suficiente para 16 contas.")
+        return go("Horários ou legendas inválidos. Os perfis precisam de intervalos fixos de 30 minutos.")
     now=datetime.now(TZ)
     if not folder or day<now.date() or day==now.date() and datetime.combine(day,at,tzinfo=TZ)<=now:
         return go("Confira o link da pasta e escolha uma data/horário futuros.")
@@ -204,7 +213,7 @@ def save_settings(request: Request, csrf: str=Form(...), folder_url: str=Form(..
                   start_time=VALUES(start_time),end_time=VALUES(end_time),days=VALUES(days)""",
                 (folder,captions[0],json.dumps(captions,ensure_ascii=False),day,at,until,DAYS))
         db.commit()
-    return go(f"Campanha salva: {len(captions)} legendas e publicações distribuídas entre {at.strftime('%H:%M')} e {until.strftime('%H:%M')}.")
+    return go(f"Campanha salva: {len(captions)} legendas. Cada conta publica uma vez por dia, com intervalos de 30 minutos.")
 
 @router.post("/campaign/sync")
 def sync_folder(request: Request, csrf: str=Form(...)):
@@ -283,7 +292,7 @@ def generate(request: Request, csrf: str=Form(...)):
             rows=build_plan(accounts,assets,config["start_date"],at,DAYS,
                             captions=stored_captions(config),end_at=until)
         except ValueError:
-            return go("Horários inválidos para distribuir as contas.")
+            return go("A janela é curta para todas as contas com intervalo de 30 minutos; aumente o horário final.")
         with db.cursor() as c:
             for account_id,drive_id,day,due,caption in rows:
                 c.execute("""INSERT INTO social_daily_jobs(account_id,drive_id,local_day,planned_utc,caption,status)
