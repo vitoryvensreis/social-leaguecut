@@ -22,6 +22,7 @@ class MonitoringOnlyTests(unittest.TestCase):
         paths=flatten(app.routes)
         print('DEBUG ROOT ROUTES',[(type(r).__name__,getattr(r,'path',None),getattr(r,'name',None)) for r in app.routes])
         from app.monitor import router as mr
+        print('DEBUG ROUTER ATTRS',[(type(r).__name__,[k for k in dir(r) if k in ('router','routes','path','prefix') or 'router' in k]) for r in app.routes])
         print('DEBUG MONITOR ROUTES',[(type(r).__name__,getattr(r,'path',None)) for r in mr.routes])
         for path in ("/","/login","/logout","/reports/publications.csv",
                      "/api/motor/accounts","/api/motor/jobs/claim",
