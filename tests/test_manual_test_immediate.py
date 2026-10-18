@@ -42,8 +42,8 @@ class TestImmediateClaim(unittest.TestCase):
         cursor=Cursor({"id":17,"status":"planned"},job)
         db=DB(cursor)
         before=datetime.now(timezone.utc).replace(tzinfo=None)
-        with patch.dict(os.environ,{"MOTOR_API_TOKEN":"x"*64}), \\
-             patch("app.motor_api.db_conn",return_value=db), \\
+        with patch.dict(os.environ,{"MOTOR_API_TOKEN":"x"*64}), \
+             patch("app.motor_api.db_conn",return_value=db), \
              patch("app.motor_api.setup"):
             result=test_claim(TestClaim(account_id=3),authorization="Bearer "+"x"*64)
         after=datetime.now(timezone.utc).replace(tzinfo=None)
@@ -59,8 +59,8 @@ class TestImmediateClaim(unittest.TestCase):
 
     def test_today_with_review_cannot_consume_tomorrow_slot(self):
         cursor=Cursor({"id":1,"status":"needs_review"},None)
-        with patch.dict(os.environ,{"MOTOR_API_TOKEN":"x"*64}), \\
-             patch("app.motor_api.db_conn",return_value=DB(cursor)), \\
+        with patch.dict(os.environ,{"MOTOR_API_TOKEN":"x"*64}), \
+             patch("app.motor_api.db_conn",return_value=DB(cursor)), \
              patch("app.motor_api.setup"):
             with self.assertRaises(HTTPException) as cm:
                 test_claim(TestClaim(account_id=3),authorization="Bearer "+"x"*64)
@@ -70,8 +70,8 @@ class TestImmediateClaim(unittest.TestCase):
 
     def test_no_planned_job_does_not_create_duplicate(self):
         cursor=Cursor(None,None)
-        with patch.dict(os.environ,{"MOTOR_API_TOKEN":"x"*64}), \\
-             patch("app.motor_api.db_conn",return_value=DB(cursor)), \\
+        with patch.dict(os.environ,{"MOTOR_API_TOKEN":"x"*64}), \
+             patch("app.motor_api.db_conn",return_value=DB(cursor)), \
              patch("app.motor_api.setup"):
             with self.assertRaises(HTTPException) as cm:
                 test_claim(TestClaim(account_id=3),authorization="Bearer "+"x"*64)
