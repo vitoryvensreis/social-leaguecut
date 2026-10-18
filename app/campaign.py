@@ -115,7 +115,7 @@ def summary(db):
         assets = c.fetchone()["n"]
         c.execute("SELECT status, COUNT(*) AS n FROM social_daily_jobs GROUP BY status")
         counts = {r["status"]:r["n"] for r in c.fetchall()}
-        c.execute("""SELECT j.local_day, j.planned_utc, j.status, a.username, d.name
+        c.execute("""SELECT j.id,j.local_day, j.planned_utc, j.status, a.username, d.name
         FROM social_daily_jobs j JOIN social_accounts a ON a.id=j.account_id
         LEFT JOIN social_drive_assets d ON d.drive_id=j.drive_id
         ORDER BY j.planned_utc LIMIT 24""")
@@ -269,12 +269,12 @@ def generate(request: Request, csrf: str=Form(...)):
         if config["start_date"]<datetime.now(TZ).date():
             return go("A data inicial passou. Atualize a campanha para começar hoje ou depois.")
         with db.cursor() as c:
-            c.execute("SELECT id FROM social_accounts ORDER BY id LIMIT 17")
+            c.execute("SELECT id FROM social_accounts ORDER BY id")
             accounts=[r["id"] for r in c.fetchall()]
             c.execute("SELECT drive_id FROM social_drive_assets WHERE folder_id=%s ORDER BY drive_id",(config["folder_id"],))
             assets=[r["drive_id"] for r in c.fetchall()]
-        if not 1<=len(accounts)<=16:
-            return go("Cadastre de 1 a 16 contas para planejar a campanha.")
+        if not accounts:
+            return go("Cadastre ao menos uma conta para planejar a campanha.")
         if not assets:
             return go("Sincronize primeiro uma pasta que contenha vídeos.")
         at=mysql_clock(config["start_time"])
