@@ -336,6 +336,117 @@ def review_post(job_id:int,payload:ReviewResult,authorization:str|None=Header(de
         db.commit()
     return {"status":"published","permalink":payload.permalink}
 
+class ConfirmNoReel(BaseModel):
+    username: str=Field(min_length=1,max_length=30)
+    confirmed_no_reel: bool
+
+def init_review_audit(db):
+    """Append-only reconciliation log, never erase a possible upload silently."""
+    with db.cursor() as c:
+        c.execute("""CREATE TABLE IF NOT EXISTS social_manual_rechecks(
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            job_id BIGINT NOT NULL,
+            account_id INT NOT NULL,
+            local_day DATE NOT NULL,
+            original_status VARCHAR(25) NOT NULL,
+            verified_username VARCHAR(30) NOT NULL,
+            verified_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY once_per_job (job_id),
+            UNIQUE KEY once_per_account_day (account_id,local_day)
+        )""")
+    db.commit()
+
+@router.get("/jobs/review-pending")
+def review_pending(account_id:int|None=None,authorization:str|None=Header(default=None)):
+    """Show uncertain posts for one account so user can inspect Instagram first."""
+    authorize(authorization)
+    if account_id is not None and account_id<=0:
+        raise HTTPException(422,detail="Conta inválida")
+    with db_conn() as db:
+        setup(db)
+        with db.cursor() as c:
+            if account_id is None:
+                c.execute("""SELECT j.id,j.account_id,j.local_day,j.status,j.permalink,
+                       j.planned_utc,a.username,d.name AS video
+                  FROM social_daily_jobs j
+                  JOIN social_accounts a ON a.id=j.account_id
+                  LEFT JOIN social_drive_assets d ON d.drive_id=j.drive_id
+                  WHERE j.status IN ('needs_review','blocked','publishing')
+                  ORDER BY j.id DESC LIMIT 100""")
+            else:
+                c.execute("""SELECT j.id,j.account_id,j.local_day,j.status,j.permalink,
+                       j.planned_utc,a.username,d.name AS video
+                  FROM social_daily_jobs j
+                  JOIN social_accounts a ON a.id=j.account_id
+                  LEFT JOIN social_drive_assets d ON d.drive_id=j.drive_id
+                  WHERE j.account_id=%s AND j.status IN ('needs_review','blocked','publishing')
+                  ORDER BY j.id DESC LIMIT 30""",(account_id,))
+            items=c.fetchall()
+    return {"items":[{
+        "id":r["id"],"account_id":r["account_id"],
+        "username":r["username"],"status":r["status"],
+        "day":str(r["local_day"]),"video":r.get("video") or "Vídeo",
+        "permalink":r.get("permalink"),
+    } for r in items]}
+
+@router.post("/jobs/{job_id}/clear-unpublished")
+def clear_unpublished(job_id:int,payload:ConfirmNoReel,
+                      authorization:str|None=Header(default=None)):
+    """Explicit manual reconciliation, ONE try per account/day.
+
+    No upload is retried here. The user must independently inspect the target
+    Instagram account and type its username. Keep a durable audit trail before
+    releasing a stale job. Never touch publishing or published records.
+    """
+    authorize(authorization)
+    if not payload.confirmed_no_reel:
+        raise HTTPException(422,detail="Confirme manualmente que o Reel NÃO foi publicado.")
+    if job_id<=0:
+        raise HTTPException(422,detail="ID inválido")
+    with db_conn() as db:
+        setup(db)
+        init_review_audit(db)
+        try:
+            with db.cursor() as c:
+                c.execute("""SELECT j.id,j.account_id,j.local_day,j.status,
+                        j.permalink,j.media_pk,a.username
+                    FROM social_daily_jobs j
+                    JOIN social_accounts a ON a.id=j.account_id
+                    WHERE j.id=%s FOR UPDATE""",(job_id,))
+                job=c.fetchone()
+                if not job:
+                    raise HTTPException(404,detail="Agendamento não encontrado.")
+                if job["status"] not in ("needs_review","blocked"):
+                    raise HTTPException(409,detail="Somente tentativas em revisão ou bloqueadas podem ser liberadas.")
+                if job.get("permalink") or job.get("media_pk"):
+                    raise HTTPException(409,detail="Este registro já tem identificador de Reel. Não liberar.")
+                username=job["username"]
+                if payload.username.strip().lstrip("@").lower()!=username.lower():
+                    raise HTTPException(422,detail="Digite o @ exato desta conta para confirmar.")
+                # One reconciliation per account/local day maximum. Repeated
+                # failures require investigation, not another round of uploads.
+                c.execute("""SELECT id FROM social_manual_rechecks
+                    WHERE account_id=%s AND local_day=%s""",
+                    (job["account_id"],job["local_day"]))
+                if c.fetchone():
+                    raise HTTPException(409,detail="Esta conta já teve uma revisão liberada neste dia. Não repetir a publicação sem investigação.")
+                c.execute("""INSERT INTO social_manual_rechecks
+                    (job_id,account_id,local_day,original_status,verified_username)
+                    VALUES(%s,%s,%s,%s,%s)""",
+                    (job["id"],job["account_id"],job["local_day"],job["status"],username))
+                c.execute("DELETE FROM social_motor_claims WHERE job_id=%s",(job_id,))
+                c.execute("""UPDATE social_daily_jobs SET status='planned'
+                    WHERE id=%s AND status IN ('needs_review','blocked')
+                       AND permalink IS NULL AND media_pk IS NULL""",(job_id,))
+                if c.rowcount!=1:
+                    raise HTTPException(409,detail="Estado alterado simultaneamente. Atualize a revisão.")
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+    return {"status":"planned","job_id":job_id,
+        "message":"Registro liberado após conferência manual. Só inicie novo teste se nenhum Reel anterior foi publicado."}
+
 @router.get("/media/{drive_id}")
 def download(drive_id:str,authorization:str|None=Header(default=None)):
     authorize(authorization)
