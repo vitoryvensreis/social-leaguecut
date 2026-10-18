@@ -12,11 +12,11 @@
 <label>Legendas variadas (separe cada legenda por uma linha com ---)</label>
 <textarea name="captions_text" rows="9" maxlength="68000" required placeholder="Legenda 1 com hashtags&#10;---&#10;Legenda 2 com outras palavras&#10;---&#10;Legenda 3">{{campaign_captions_text}}</textarea>
 <div class="grid"><div><label>Início da campanha</label><input type="date" name="start_date" value="{{campaign.start_date if campaign else ''}}" required></div><div><label>Janela diária · início</label><input type="time" name="start_time" value="{{campaign_start_time}}" required></div><div><label>Janela diária · término</label><input type="time" name="end_time" value="{{campaign_end_time}}" required></div></div>
-<p class="muted">Sugestão: 10:00–19:00. Para 16 contas, o sistema espalha os horários pelo dia com intervalos mínimos de 12 minutos e sorteia uma nova distribuição a cada dia. Fuso: Fortaleza.</p>
+<p class="muted">Agenda confirmada: 1 Reel por perfil ao dia, com horários fixos de 30 em 30 minutos. Para 16 contas: 10:00, 10:30...17:30 (16 posts/dia, 480 em 30 dias). A ordem dos perfis é sorteada diariamente; fuso Fortaleza. A janela 10:00–19:00 permite mais 3 horários opcionais caso haja até 19 contas.</p>
 <button>Salvar legendas e horários</button></form>
 <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px">
 <form method="post" action="/campaign/sync"><input type="hidden" name="csrf" value="{{csrf}}"><button class="secondary">Sincronizar vídeos do Drive</button></form>
-<form method="post" action="/campaign/generate" onsubmit="return confirm('Gerar/recalcular até 30 dias de programação? Rascunhos futuros existentes serão atualizados; nenhuma publicação será enviada agora.')"><input type="hidden" name="csrf" value="{{csrf}}"><button>Gerar 30 dias de programação</button></form>
+<form method="post" action="/campaign/generate" onsubmit="return confirm('Gerar/recalcular até 30 dias de programação? Rascunhos pendentes anteriores serão substituídos pelos novos horários de 30 minutos; publicações já realizadas serão preservadas.')"><input type="hidden" name="csrf" value="{{csrf}}"><button>Gerar 30 dias de programação</button></form>
 </div>
 {% if campaign_summary.jobs %}<div style="overflow-x:auto"><table><tr><th>Dia</th><th>Conta</th><th>Vídeo</th><th>Status</th></tr>{% for item in campaign_summary.jobs %}<tr><td>#{{item.id}} · {{item.local_day}}</td><td>@{{item.username}}</td><td>{{item.name or 'Arquivo indisponível'}}</td><td>{{item.status}}</td></tr>{% endfor %}</table></div>{% endif %}
 </section>
