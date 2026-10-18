@@ -79,7 +79,7 @@ def failure_reason(exc):
     name=type(exc).__name__
     if name in ("TwoFactorRequired","ChallengeRequired","ChallengeError",
                 "ChallengeUnknownStep","CheckpointRequired","ConsentRequired"):
-        return "needs_verification","Instagram exige confirmação. Confira o aplicativo antes de tentar novamente."
+        return "needs_verification","Instagram exige verificação. Confira o aplicativo antes de tentar novamente."
     if name in ("FeedbackRequired","PleaseWaitFewMinutes","RateLimitError",
                 "ClientThrottledError","ClientForbiddenError","ClientUnauthorizedError",
                 "ClientUnpredictableError"):
