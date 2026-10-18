@@ -190,33 +190,65 @@ class TestClaim(BaseModel):
 
 @router.post("/jobs/claim-test")
 def test_claim(payload:TestClaim,authorization:str|None=Header(default=None)):
-    """Claim ONE scheduled slot for a user-confirmed live test.
+    """Start a real test immediately, NOT at a future planned slot.
 
-    Testing consumes the selected account's earliest planned slot; its date
-    remains visible in reporting. No second/duplicate job is created.
+    Move at most one planned job to NOW, and use today's local_day to enforce
+    the once-per-account-per-day constraint. The Windows 2/3-minute timer
+    waits *before* calling this endpoint: there is no Instagram scheduler.
     """
     authorize(authorization)
+    now_local=datetime.now(TZ).date()
+    now_utc=datetime.now(timezone.utc).replace(tzinfo=None)
     with db_conn() as db:
         setup(db)
         with db.cursor() as c:
-            c.execute("""SELECT j.id,j.account_id,j.drive_id,j.caption,j.local_day,a.username
-              FROM social_daily_jobs j
-              JOIN social_accounts a ON a.id=j.account_id
-              WHERE j.account_id=%s AND j.status='planned' AND a.status='connected'
-              ORDER BY j.planned_utc,j.id LIMIT 1 FOR UPDATE""",(payload.account_id,))
+            # Guard uncertain/successful uploads on this same local calendar day.
+            c.execute("""SELECT id,status FROM social_daily_jobs
+                WHERE account_id=%s AND local_day=%s FOR UPDATE""",
+                (payload.account_id,now_local))
+            existing=c.fetchone()
+            if existing and existing["status"]!="planned":
+                db.commit()
+                raise HTTPException(409,detail=(
+                    "Esta conta já tem uma publicação registrada hoje "
+                    "(inclusive revisão ou falha). Confira o Instagram "
+                    "antes de permitir outro teste."
+                ))
+            c.execute("""SELECT j.id,j.account_id,j.drive_id,j.caption,j.local_day,
+                                 j.status,a.username
+                FROM social_daily_jobs j
+                JOIN social_accounts a ON a.id=j.account_id
+                WHERE j.account_id=%s AND j.status='planned'
+                  AND j.local_day >=%s AND a.status='connected'
+                ORDER BY j.local_day,j.planned_utc,j.id
+                LIMIT 1 FOR UPDATE""",(payload.account_id,now_local))
             job=c.fetchone()
             if not job:
                 db.commit()
-                raise HTTPException(409,detail="Nenhum agendamento planejado para essa conta. Gere a agenda primeiro.")
+                raise HTTPException(409,detail=(
+                    "Nenhum horário planejado disponível para esta conta. "
+                    "Gere a campanha e confira se a sessão está conectada."
+                ))
+            # When today's slot exists, it must be the one we reserve.
+            if existing and existing["id"]!=job["id"]:
+                db.commit()
+                raise HTTPException(409,detail="Há outro agendamento para esta conta hoje.")
             token=secrets.token_urlsafe(40)
             digest=hashlib.sha256(token.encode()).hexdigest()
-            c.execute("UPDATE social_daily_jobs SET status='publishing' WHERE id=%s AND status='planned'",(job["id"],))
+            c.execute("""UPDATE social_daily_jobs SET
+                status='publishing', local_day=%s, planned_utc=%s
+                WHERE id=%s AND status='planned'""",
+                (now_local,now_utc,job["id"]))
+            if c.rowcount!=1:
+                db.rollback()
+                raise HTTPException(409,detail="Agendamento já reservado por outro processo.")
             c.execute("""INSERT INTO social_motor_claims(job_id,token_hash,claimed_at)
-                         VALUES(%s,%s,UTC_TIMESTAMP())""",(job["id"],digest))
+                VALUES(%s,%s,UTC_TIMESTAMP())""",(job["id"],digest))
         db.commit()
     return {"job":{"id":job["id"],"account_id":job["account_id"],
          "username":job["username"],"drive_id":job["drive_id"],
-         "caption":job["caption"],"claim_token":token,"test":True}}
+         "caption":job["caption"],"claim_token":token,"test":True,
+         "execution":"immediate","planned_utc":now_utc.isoformat()}}
 
 @router.post("/jobs/{job_id}/result")
 def publish_result(job_id:int,payload:Result,authorization:str|None=Header(default=None)):
