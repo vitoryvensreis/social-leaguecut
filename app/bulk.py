@@ -162,8 +162,11 @@ def remove_failed(request:Request,csrf:str=Form(...),confirmed:str=Form("")):
     if confirmed!="yes":
         return go("Confirmação obrigatória para remover proxies falhos.")
     from app.main import db_connection
+    from app.routing import init as routing_init
     with db_connection() as db:
         proxy_init(db)
+        instagram_init(db)
+        routing_init(db)
         with db.cursor() as c:
             c.execute("""DELETE p FROM social_proxies p
                LEFT JOIN social_account_routes r ON r.proxy_id=p.id
