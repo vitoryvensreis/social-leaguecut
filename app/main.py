@@ -16,6 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.proxies import router as proxies_router, available as get_proxies
 from app.routing import router as routing_router, list_routes, preview
 from app.drive import router as drive_router
+from app.campaign import router as campaign_router, settings as campaign_settings, summary as campaign_summary
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
@@ -24,6 +25,7 @@ app = FastAPI(title="Social LeagueCut", docs_url=None, redoc_url=None)
 app.include_router(proxies_router)
 app.include_router(routing_router)
 app.include_router(drive_router)
+app.include_router(campaign_router)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET") or "SET_SESSION_SECRET_IN_ENV_BEFORE_LOGIN", https_only=True, same_site="lax")
 
 def db_connection():
@@ -104,6 +106,15 @@ def home(request:Request):
         except Exception:
             data["error"]="Não foi possível consultar a distribuição entre contas e proxies"
     data["google_configured"]=all(os.getenv(k) for k in ("GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET","GOOGLE_REDIRECT_URI"))
+    data["campaign"]=None
+    data["campaign_summary"]={"asset_count":0,"job_counts":{},"jobs":[]}
+    if admin(request):
+        try:
+            with db_connection() as db:
+                data["campaign"]=campaign_settings(db)
+                data["campaign_summary"]=campaign_summary(db)
+        except Exception:
+            data["error"]="Não foi possível consultar o planejamento da campanha."
     return templates.TemplateResponse(request,"index.html",data)
 
 @app.post("/login")
