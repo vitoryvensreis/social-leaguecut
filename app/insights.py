@@ -92,6 +92,9 @@ def record(request:Request,job_id:int,csrf:str=Form(...),url:str=Form(...),media
     return go("Link do Reel registrado no relatório.")
 
 def collect_daily(db, cap_total=80, cap_per_account=5):
+    if os.environ.get("ALLOW_LEGACY_VPS_INSTAGRAM_WORKER","false").lower()!="true":
+        logger.info("VPS Instagram metrics worker disabled: use local Windows motor")
+        return {"scanned":0,"disabled":True}
     """Save at most one snapshot per Reel per Fortaleza-local day.
 
     Caps prevent hundreds of private API reads on a single run.
