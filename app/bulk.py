@@ -120,16 +120,21 @@ def import_accounts(request:Request,csrf:str=Form(...),lines:str=Form(...)):
     with db_connection() as db:
         instagram_init(db)
         with db.cursor() as c:
+            c.execute("SHOW COLUMNS FROM social_accounts LIKE 'email'")
+            if not c.fetchone():
+                c.execute("ALTER TABLE social_accounts ADD COLUMN email VARCHAR(255) NULL")
             for username,email,password in rows:
                 c.execute("SELECT id,status FROM social_accounts WHERE username=%s",(username,))
                 current=c.fetchone()
                 if current:
                     account_id=current["id"]
                 else:
-                    c.execute("INSERT INTO social_accounts(username) VALUES(%s)",(username,))
+                    c.execute("INSERT INTO social_accounts(username,email) VALUES(%s,%s)",(username,email or None))
                     account_id=c.lastrowid
                     added+=1
                     queued.append(account_id)
+                if email and current:
+                    c.execute("UPDATE social_accounts SET email=%s WHERE id=%s",(email,account_id))
                 if password:
                     c.execute("SELECT session_blob FROM social_instagram_auth WHERE account_id=%s",(account_id,))
                     existing=c.fetchone()
@@ -168,3 +173,31 @@ def remove_failed(request:Request,csrf:str=Form(...),confirmed:str=Form("")):
             removed=c.rowcount
         db.commit()
     return go(f"{removed} proxies falhos e sem vínculos removidos. Contas não foram alteradas.")
+
+@router.post("/bulk/accounts/remove-failed")
+def remove_failed_accounts(request:Request,csrf:str=Form(...),confirmed:str=Form("")):
+    if not allowed(request,csrf):
+        return JSONResponse({"error":"Forbidden"},status_code=403)
+    if confirmed!="yes":
+        return go("Confirmação obrigatória antes de remover contas.")
+    from app.main import db_connection
+    from app.campaign import init as campaign_init
+    from app.routing import init as routing_init
+    with db_connection() as db:
+        instagram_init(db)
+        routing_init(db)
+        campaign_init(db)
+        with db.cursor() as c:
+            c.execute("""SELECT a.id FROM social_accounts a
+                WHERE a.status='failed'
+                  AND NOT EXISTS(SELECT 1 FROM social_daily_jobs j
+                    WHERE j.account_id=a.id AND j.status IN ('published','publishing'))""")
+            identifiers=[row["id"] for row in c.fetchall()]
+            for account_id in identifiers:
+                c.execute("DELETE FROM social_daily_jobs WHERE account_id=%s",(account_id,))
+                c.execute("DELETE FROM social_post_accounts WHERE account_id=%s",(account_id,))
+                c.execute("DELETE FROM social_instagram_auth WHERE account_id=%s",(account_id,))
+                c.execute("DELETE FROM social_account_routes WHERE account_id=%s",(account_id,))
+                c.execute("DELETE FROM social_accounts WHERE id=%s",(account_id,))
+        db.commit()
+    return go(f"{len(identifiers)} contas falhas removidas após confirmação.")
