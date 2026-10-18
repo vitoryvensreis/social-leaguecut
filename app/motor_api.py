@@ -14,6 +14,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from typing import List
 from app.drive import creds as google_creds
 from app.campaign import init as campaign_init
 from app.insights import init as metrics_init, validate_permalink
@@ -42,6 +43,9 @@ def setup(db):
 def db_conn():
     from app.main import db_connection
     return db_connection()
+
+class ClaimRequest(BaseModel):
+    ready_accounts: List[int] = Field(default_factory=list, max_length=100)
 
 class AccountStatus(BaseModel):
     status: str
@@ -86,22 +90,33 @@ def account_status(account_id:int,update:AccountStatus,authorization:str|None=He
     return {"status":"ok"}
 
 @router.post("/jobs/claim")
-def claim(authorization:str|None=Header(default=None)):
+def claim(payload:ClaimRequest,authorization:str|None=Header(default=None)):
     authorize(authorization)
+    ready=sorted({value for value in payload.ready_accounts if isinstance(value,int) and value>0})
     now=datetime.now(timezone.utc).replace(tzinfo=None)
     valid_after=now-timedelta(minutes=90)
     with db_conn() as db:
         setup(db)
         with db.cursor() as c:
-            # Missed jobs are deliberately NOT all published at the next boot.
+            # Never retry uncertain uploads, even after the PC crashes.
+            c.execute("""UPDATE social_daily_jobs j JOIN social_motor_claims m ON m.job_id=j.id
+                SET j.status='needs_review'
+                WHERE j.status='publishing'
+                  AND m.claimed_at<DATE_SUB(UTC_TIMESTAMP(),INTERVAL 90 MINUTE)""")
             c.execute("""UPDATE social_daily_jobs SET status='missed'
                 WHERE status='planned' AND planned_utc<%s""",(valid_after,))
-            c.execute("""SELECT j.id,j.account_id,j.drive_id,j.caption,j.planned_utc,a.username
+            if not ready:
+                db.commit()
+                return {"job":None}
+            placeholder=",".join(["%s"]*len(ready))
+            query=f"""SELECT j.id,j.account_id,j.drive_id,j.caption,j.planned_utc,a.username
                 FROM social_daily_jobs j
                 JOIN social_accounts a ON a.id=j.account_id
                 WHERE j.status='planned' AND a.status='connected'
+                  AND j.account_id IN ({placeholder})
                   AND j.planned_utc BETWEEN %s AND %s
-                ORDER BY j.planned_utc,j.id LIMIT 1 FOR UPDATE""",(valid_after,now))
+                ORDER BY j.planned_utc,j.id LIMIT 1 FOR UPDATE"""
+            c.execute(query,(*ready,valid_after,now))
             job=c.fetchone()
             if not job:
                 db.commit()
