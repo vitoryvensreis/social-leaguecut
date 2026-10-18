@@ -53,7 +53,7 @@ class DailyCampaignTests(unittest.TestCase):
 
     def test_multiline_caption_separator(self):
         from app.campaign import split_captions
-        parsed=split_captions("linha 1\\nlinha 2\\n---\\nLegenda B")
+        parsed=split_captions("linha 1\nlinha 2\n---\nLegenda B")
         self.assertEqual(len(parsed),2)
         self.assertIn("linha 2",parsed[0])
 
