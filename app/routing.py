@@ -23,6 +23,25 @@ def init(db):
         )""")
     db.commit()
 
+def auto_assign_proxy(db, account_id: int):
+    """Balance new accounts over healthy proxies and keep each assignment stable."""
+    init(db)
+    with db.cursor() as c:
+        c.execute("""SELECT p.id,COUNT(r.account_id) AS assignments
+          FROM social_proxies p
+          LEFT JOIN social_account_routes r ON r.proxy_id=p.id
+          WHERE p.last_result='ok'
+          GROUP BY p.id
+          ORDER BY assignments ASC, RAND()
+          LIMIT 1""")
+        choice=c.fetchone()
+        if not choice:
+            return None
+        c.execute("INSERT IGNORE INTO social_account_routes(account_id,proxy_id) VALUES(%s,%s)",
+                  (account_id,choice["id"]))
+    db.commit()
+    return choice["id"]
+
 def list_routes(db):
     init(db)
     with db.cursor() as c:
