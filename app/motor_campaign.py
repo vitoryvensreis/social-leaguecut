@@ -9,13 +9,16 @@ from datetime import date,datetime,time
 from fastapi import APIRouter,Header,HTTPException
 from pydantic import BaseModel,Field
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from google.auth.exceptions import RefreshError
+from cryptography.fernet import InvalidToken
 
 from app.motor_api import authorize
 from app.campaign import (
     init,settings,build_plan,stored_captions,split_captions,
     folder_id_from_input,schedule_offsets,mysql_clock,TZ,MAX_DRIVE_FILES
 )
-from app.drive import creds as drive_credentials, store as save_credentials
+from app.drive import creds as drive_credentials, store as save_credentials, drive_error_message
 
 router=APIRouter(prefix="/api/motor/campaign",tags=["local-campaign"])
 logger=logging.getLogger("social.motor_campaign")
@@ -85,53 +88,82 @@ def update_settings(payload:CampaignSettings,authorization:str|None=Header(defau
 
 @router.post("/sync-drive")
 def sync_drive(authorization:str|None=Header(default=None)):
+    """List video metadata for the configured Drive folder, with safe diagnostics.
+
+    Credentials, Google error response bodies, and token values are NEVER logged.
+    """
     authorize(authorization)
-    with db_conn() as db:
-        config=settings(db)
-        if not config:
-            raise HTTPException(409,detail="Configure a campanha primeiro")
-        credentials=drive_credentials(db)
-        if not credentials:
-            raise HTTPException(409,detail="Conecte o Google Drive no site primeiro")
-        folder=config["folder_id"]
-        try:
+    stage="open_database"
+    try:
+        with db_conn() as db:
+            stage="read_campaign"
+            config=settings(db)
+            if not config:
+                raise HTTPException(409,detail="Configure a campanha no Windows antes de sincronizar.")
+            stage="read_google_credentials"
+            credentials=drive_credentials(db)
+            if not credentials:
+                raise HTTPException(409,detail="Drive não conectado. Entre no site e autorize o Google Drive.")
+            folder=config["folder_id"]
+            stage="google_folder"
             api=build("drive","v3",credentials=credentials,cache_discovery=False)
-            meta=api.files().get(fileId=folder,fields="mimeType",supportsAllDrives=True).execute()
+            meta=api.files().get(fileId=folder,fields="id,name,mimeType",
+                supportsAllDrives=True).execute()
             if meta.get("mimeType")!="application/vnd.google-apps.folder":
-                raise HTTPException(422,detail="ID não pertence a uma pasta")
+                raise HTTPException(422,detail="O endereço configurado não é uma pasta Google Drive.")
+            stage="google_list"
             files=[]
             page_token=None
             while True:
-                page=api.files().list(q=f"'{folder}' in parents and trashed = false",
+                page=api.files().list(
+                    q=f"'{folder}' in parents and trashed = false",
                     fields="nextPageToken,files(id,name,mimeType,size)",
-                    pageSize=1000,pageToken=page_token,
-                    supportsAllDrives=True,includeItemsFromAllDrives=True).execute()
+                    pageSize=500,pageToken=page_token,
+                    supportsAllDrives=True,includeItemsFromAllDrives=True,
+                ).execute()
                 files.extend(item for item in page.get("files",[])
                     if item.get("mimeType","").startswith("video/")
                     and item.get("id") and int(item.get("size") or 0)>0)
+                if len(files)>MAX_DRIVE_FILES:
+                    raise HTTPException(422,detail="Pasta excede 2000 vídeos.")
                 page_token=page.get("nextPageToken")
                 if not page_token:
                     break
-                if len(files)>=MAX_DRIVE_FILES:
-                    raise HTTPException(422,detail="Pasta excede o limite de 2000 vídeos")
-            if len(files)>MAX_DRIVE_FILES:
-                raise HTTPException(422,detail="Pasta excede o limite de 2000 vídeos")
+            stage="save_video_catalog"
+            init(db)
             with db.cursor() as c:
                 for item in files:
-                    c.execute("""INSERT INTO social_drive_assets(drive_id,folder_id,name,mime_type,size_bytes)
+                    c.execute("""INSERT INTO social_drive_assets
+                        (drive_id,folder_id,name,mime_type,size_bytes)
                         VALUES(%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
                         folder_id=VALUES(folder_id),name=VALUES(name),
                         mime_type=VALUES(mime_type),size_bytes=VALUES(size_bytes)""",
                         (item["id"],folder,item.get("name","Vídeo")[:255],
                          item["mimeType"][:100],int(item.get("size",0))))
             db.commit()
+            stage="save_google_credentials"
             save_credentials(db,credentials)
-        except HTTPException:
-            raise
-        except Exception as exc:
-            logger.warning("Local motor Drive sync error class=%s",type(exc).__name__)
-            raise HTTPException(503,detail="Falha ao sincronizar a pasta do Drive")
-    return {"status":"synced","videos":len(files)}
+        return {"status":"synced","videos":len(files),"folder":meta.get("name","")}
+    except HTTPException:
+        raise
+    except (RefreshError, InvalidToken) as exc:
+        logger.warning("Drive sync failure stage=%s error_class=%s",stage,type(exc).__name__)
+        raise HTTPException(409,detail="A autorização Google expirou ou as credenciais locais ficaram inválidas. Reconecte o Google Drive pelo site.")
+    except HttpError as exc:
+        status=int(getattr(exc.resp,"status",0))
+        logger.warning("Drive sync failure stage=%s google_http=%s",stage,status)
+        if status==404:
+            raise HTTPException(404,detail="Pasta não encontrada ou sem acesso no Google Drive. Confira a conta e o link.")
+        if status in (401,403):
+            raise HTTPException(409,detail=drive_error_message(exc,stage))
+        if status==429:
+            raise HTTPException(503,detail="Limite temporário da API Google Drive. Aguarde e tente novamente.")
+        raise HTTPException(503,detail=drive_error_message(exc,stage))
+    except Exception as exc:
+        logger.warning("Drive sync failure stage=%s error_class=%s",stage,type(exc).__name__)
+        if stage in ("read_campaign","save_video_catalog","save_google_credentials","open_database"):
+            raise HTTPException(503,detail=f"Erro de banco na etapa {stage}. Consulte logs da VPS.")
+        raise HTTPException(503,detail=f"Erro de sincronização na etapa {stage} ({type(exc).__name__}). Consulte logs da VPS.")
 
 @router.post("/generate")
 def generate_schedule(authorization:str|None=Header(default=None)):
