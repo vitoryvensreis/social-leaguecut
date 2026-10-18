@@ -47,6 +47,9 @@ def db_conn():
 class ClaimRequest(BaseModel):
     ready_accounts: List[int] = Field(default_factory=list, max_length=100)
 
+class AccountCreate(BaseModel):
+    username: str=Field(min_length=1,max_length=30)
+
 class AccountStatus(BaseModel):
     status: str
 
@@ -105,6 +108,24 @@ def accounts(authorization:str|None=Header(default=None)):
         with db.cursor() as c:
             c.execute("SELECT id,username,status FROM social_accounts ORDER BY id")
             return {"accounts":c.fetchall()}
+
+@router.post("/accounts")
+def create_account(payload:AccountCreate,authorization:str|None=Header(default=None)):
+    """Register the username from Windows. Passwords never enter the VPS."""
+    authorize(authorization)
+    username=payload.username.strip().lstrip("@").lower()
+    if not re.fullmatch(r"[a-z0-9._]{1,30}",username):
+        raise HTTPException(422,detail="Invalid Instagram username")
+    with db_conn() as db:
+        with db.cursor() as c:
+            c.execute("SELECT id FROM social_accounts WHERE username=%s",(username,))
+            existing=c.fetchone()
+            if existing:
+                return {"id":existing["id"],"username":username,"created":False}
+            c.execute("INSERT INTO social_accounts(username,status) VALUES(%s,'disconnected')",(username,))
+            aid=c.lastrowid
+        db.commit()
+    return {"id":aid,"username":username,"created":True}
 
 @router.post("/accounts/{account_id}/status")
 def account_status(account_id:int,update:AccountStatus,authorization:str|None=Header(default=None)):
