@@ -19,6 +19,7 @@ from app.campaign import (
     folder_id_from_input,schedule_offsets,mysql_clock,TZ,MAX_DRIVE_FILES
 )
 from app.drive import creds as drive_credentials, store as save_credentials, drive_error_message
+from app.local_library import LOCAL_FOLDER, ensure_table as ensure_local_inventory
 
 router=APIRouter(prefix="/api/motor/campaign",tags=["local-campaign"])
 logger=logging.getLogger("social.motor_campaign")
@@ -41,7 +42,10 @@ def read_settings(authorization:str|None=Header(default=None)):
     with db_conn() as db:
         config=settings(db)
         with db.cursor() as c:
-            c.execute("SELECT COUNT(*) AS n FROM social_drive_assets")
+            ensure_local_inventory(db)
+            c.execute("""SELECT COUNT(*) AS n FROM social_local_inventory""") if (config and config["folder_id"]==LOCAL_FOLDER) else c.execute(
+                "SELECT COUNT(*) AS n FROM social_drive_assets WHERE folder_id=%s",(config["folder_id"],)
+            ) if config else c.execute("SELECT 0 AS n")
             assets=c.fetchone()["n"]
             c.execute("SELECT status,COUNT(*) AS n FROM social_daily_jobs GROUP BY status")
             statuses={r["status"]:r["n"] for r in c.fetchall()}
@@ -59,7 +63,7 @@ def read_settings(authorization:str|None=Header(default=None)):
 @router.put("")
 def update_settings(payload:CampaignSettings,authorization:str|None=Header(default=None)):
     authorize(authorization)
-    folder=folder_id_from_input(payload.folder_url)
+    folder=LOCAL_FOLDER if payload.folder_url.strip()==LOCAL_FOLDER else folder_id_from_input(payload.folder_url)
     if not folder:
         raise HTTPException(422,detail="Endereço da pasta do Drive inválido")
     if payload.start_date<datetime.now(TZ).date():
@@ -105,6 +109,8 @@ def sync_drive(authorization:str|None=Header(default=None)):
             if not credentials:
                 raise HTTPException(409,detail="Drive não conectado. Entre no site e autorize o Google Drive.")
             folder=config["folder_id"]
+            if folder==LOCAL_FOLDER:
+                raise HTTPException(409,detail="Campanha usa pasta local do Windows. Clique em Sincronizar pasta local no aplicativo.")
             stage="google_folder"
             api=build("drive","v3",credentials=credentials,cache_discovery=False)
             meta=api.files().get(fileId=folder,fields="id,name,mimeType",
@@ -186,7 +192,11 @@ def generate_schedule(authorization:str|None=Header(default=None)):
         with db.cursor() as c:
             c.execute("SELECT id FROM social_accounts ORDER BY id")
             accounts=[r["id"] for r in c.fetchall()]
-            c.execute("SELECT drive_id FROM social_drive_assets WHERE folder_id=%s ORDER BY drive_id",(config["folder_id"],))
+            if config["folder_id"]==LOCAL_FOLDER:
+                ensure_local_inventory(db)
+                c.execute("SELECT drive_id FROM social_local_inventory ORDER BY drive_id")
+            else:
+                c.execute("SELECT drive_id FROM social_drive_assets WHERE folder_id=%s ORDER BY drive_id",(config["folder_id"],))
             videos=[r["drive_id"] for r in c.fetchall()]
         if not accounts or not videos:
             raise HTTPException(409,detail="Cadastre contas e sincronize vídeos antes de gerar")
