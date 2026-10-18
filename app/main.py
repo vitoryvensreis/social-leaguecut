@@ -17,6 +17,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.drive import router as drive_router
 from app.motor_api import router as motor_router
+from app.motor_campaign import router as motor_campaign_router
 from app.monitor import router as reports_router, report as monitor_report
 
 ROOT=Path(__file__).resolve().parent.parent
@@ -25,6 +26,7 @@ templates=Jinja2Templates(directory=str(ROOT/"app"/"templates"))
 app=FastAPI(title="Social LeagueCut · Central de resultados",docs_url=None,redoc_url=None)
 app.include_router(drive_router)
 app.include_router(motor_router)
+app.include_router(motor_campaign_router)
 app.include_router(reports_router)
 app.add_middleware(SessionMiddleware,
     secret_key=os.getenv("SESSION_SECRET") or "SET_SESSION_SECRET_IN_ENV_BEFORE_LOGIN",
