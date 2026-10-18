@@ -113,47 +113,26 @@ def import_accounts(request:Request,csrf:str=Form(...),lines:str=Form(...)):
         rows=parse_account_rows(lines)
     except ValueError:
         return go("Formato inválido. Cole colunas usuário, email e senha (separadas por tabulação ou vírgula).")
-    if any(pw for _,_,pw in rows) and not __import__("os").environ.get("INSTAGRAM_ENCRYPTION_KEY"):
-        return go("Configure INSTAGRAM_ENCRYPTION_KEY antes de importar senhas.")
+    # Passwords from pasted spreadsheets are deliberately discarded.
+    # All Instagram authentication now happens inside Windows Credential Manager.
     added=0
-    queued=[]
     with db_connection() as db:
-        instagram_init(db)
         with db.cursor() as c:
             c.execute("SHOW COLUMNS FROM social_accounts LIKE 'email'")
             if not c.fetchone():
                 c.execute("ALTER TABLE social_accounts ADD COLUMN email VARCHAR(255) NULL")
-            for username,email,password in rows:
-                c.execute("SELECT id,status FROM social_accounts WHERE username=%s",(username,))
+            for username,email,_ignored_password in rows:
+                c.execute("SELECT id FROM social_accounts WHERE username=%s",(username,))
                 current=c.fetchone()
                 if current:
-                    account_id=current["id"]
-                else:
-                    c.execute("INSERT INTO social_accounts(username,email) VALUES(%s,%s)",(username,email or None))
-                    account_id=c.lastrowid
-                    added+=1
-                    queued.append(account_id)
-                if email and current:
-                    c.execute("UPDATE social_accounts SET email=%s WHERE id=%s",(email,account_id))
-                if password:
-                    c.execute("SELECT session_blob FROM social_instagram_auth WHERE account_id=%s",(account_id,))
-                    existing=c.fetchone()
-                    if existing and existing["session_blob"]:
-                        continue  # Preserve existing authenticated session
-                    encrypted=instagram_cipher().encrypt(password.encode()).decode()
-                    c.execute("""INSERT INTO social_instagram_auth
-                         (account_id,encrypted_password,session_blob,proxy_id)
-                         VALUES(%s,%s,'',0)
-                         ON DUPLICATE KEY UPDATE encrypted_password=VALUES(encrypted_password)""",
-                         (account_id,encrypted))
+                    if email:
+                        c.execute("UPDATE social_accounts SET email=%s WHERE id=%s",(email,current["id"]))
+                    continue
+                c.execute("INSERT INTO social_accounts(username,email,status) VALUES(%s,%s,'disconnected')",
+                         (username,email or None))
+                added+=1
         db.commit()
-        for account_id in queued:
-            try:
-                auto_assign_proxy(db,account_id)
-            except Exception:
-                # Proxy can be assigned later, without losing imported accounts.
-                pass
-    return go(f"Importação de perfis concluída: {added} novos. Contas não foram logadas automaticamente.")
+    return go(f"{added} perfis importados sem senhas. Conecte-os pelo aplicativo Windows.")
 
 @router.post("/bulk/proxies/remove-failed")
 def remove_failed(request:Request,csrf:str=Form(...),confirmed:str=Form("")):
