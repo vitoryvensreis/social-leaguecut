@@ -94,7 +94,7 @@ def claim(payload:ClaimRequest,authorization:str|None=Header(default=None)):
     authorize(authorization)
     ready=sorted({value for value in payload.ready_accounts if isinstance(value,int) and value>0})
     now=datetime.now(timezone.utc).replace(tzinfo=None)
-    valid_after=now-timedelta(minutes=90)
+    valid_after=now-timedelta(minutes=15)
     with db_conn() as db:
         setup(db)
         with db.cursor() as c:
