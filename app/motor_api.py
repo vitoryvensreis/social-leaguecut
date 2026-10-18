@@ -244,6 +244,30 @@ def publish_result(job_id:int,payload:Result,authorization:str|None=Header(defau
         db.commit()
     return {"status":"ok","outcome":payload.outcome}
 
+class ReviewResult(BaseModel):
+    permalink: str=Field(min_length=35,max_length=500)
+
+@router.post("/jobs/{job_id}/review")
+def review_post(job_id:int,payload:ReviewResult,authorization:str|None=Header(default=None)):
+    """Resolve an uncertain browser upload ONLY after a human checks the Reel.
+
+    No retry is triggered; use this endpoint to record the real permalink.
+    """
+    authorize(authorization)
+    if not validate_permalink(payload.permalink):
+        raise HTTPException(422,detail="Link do Reel inválido")
+    with db_conn() as db:
+        setup(db)
+        with db.cursor() as c:
+            c.execute("SELECT id FROM social_daily_jobs WHERE id=%s AND status='needs_review' FOR UPDATE",(job_id,))
+            if not c.fetchone():
+                raise HTTPException(409,detail="Publicação não está pendente de revisão")
+            c.execute("""UPDATE social_daily_jobs SET status='published',
+                permalink=%s,published_at=UTC_TIMESTAMP()
+                WHERE id=%s AND status='needs_review'""",(payload.permalink,job_id))
+        db.commit()
+    return {"status":"published","permalink":payload.permalink}
+
 @router.get("/media/{drive_id}")
 def download(drive_id:str,authorization:str|None=Header(default=None)):
     authorize(authorization)
