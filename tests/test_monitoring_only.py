@@ -11,7 +11,15 @@ class MonitoringOnlyTests(unittest.TestCase):
         Environment().parse(path.read_text(encoding="utf-8"))
 
     def test_only_monitoring_and_drive_site_routes(self):
-        paths={getattr(route,"path","") for route in app.routes}
+        def flatten(routes,prefix=""):
+            found=set()
+            for route in routes:
+                path=prefix+getattr(route,"path","")
+                found.add(path)
+                if getattr(route,"routes",None):
+                    found.update(flatten(route.routes,path))
+            return found
+        paths=flatten(app.routes)
         for path in ("/","/login","/logout","/reports/publications.csv",
                      "/api/motor/accounts","/api/motor/jobs/claim",
                      "/drive/connect","/drive/callback",
