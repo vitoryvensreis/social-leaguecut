@@ -182,6 +182,39 @@ def claim(payload:ClaimRequest,authorization:str|None=Header(default=None)):
                    "username":job["username"],"drive_id":job["drive_id"],
                    "caption":job["caption"],"claim_token":token}}
 
+class TestClaim(BaseModel):
+    account_id: int=Field(gt=0)
+
+@router.post("/jobs/claim-test")
+def test_claim(payload:TestClaim,authorization:str|None=Header(default=None)):
+    """Claim ONE scheduled slot for a user-confirmed live test.
+
+    Testing consumes the selected account's earliest planned slot; its date
+    remains visible in reporting. No second/duplicate job is created.
+    """
+    authorize(authorization)
+    with db_conn() as db:
+        setup(db)
+        with db.cursor() as c:
+            c.execute("""SELECT j.id,j.account_id,j.drive_id,j.caption,j.local_day,a.username
+              FROM social_daily_jobs j
+              JOIN social_accounts a ON a.id=j.account_id
+              WHERE j.account_id=%s AND j.status='planned' AND a.status='connected'
+              ORDER BY j.planned_utc,j.id LIMIT 1 FOR UPDATE""",(payload.account_id,))
+            job=c.fetchone()
+            if not job:
+                db.commit()
+                raise HTTPException(409,detail="Nenhum agendamento planejado para essa conta. Gere a agenda primeiro.")
+            token=secrets.token_urlsafe(40)
+            digest=hashlib.sha256(token.encode()).hexdigest()
+            c.execute("UPDATE social_daily_jobs SET status='publishing' WHERE id=%s AND status='planned'",(job["id"],))
+            c.execute("""INSERT INTO social_motor_claims(job_id,token_hash,claimed_at)
+                         VALUES(%s,%s,UTC_TIMESTAMP())""",(job["id"],digest))
+        db.commit()
+    return {"job":{"id":job["id"],"account_id":job["account_id"],
+         "username":job["username"],"drive_id":job["drive_id"],
+         "caption":job["caption"],"claim_token":token,"test":True}}
+
 @router.post("/jobs/{job_id}/result")
 def publish_result(job_id:int,payload:Result,authorization:str|None=Header(default=None)):
     authorize(authorization)
