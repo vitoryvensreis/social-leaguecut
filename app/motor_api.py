@@ -85,7 +85,7 @@ def schedule(authorization:str|None=Header(default=None)):
         setup(db)
         with db.cursor() as c:
             c.execute("""SELECT j.id,j.account_id,j.local_day,j.planned_utc,
-                      j.status,a.username,d.name AS video
+                      j.drive_id,j.status,a.username,d.name AS video
                 FROM social_daily_jobs j
                 JOIN social_accounts a ON a.id=j.account_id
                 LEFT JOIN social_drive_assets d ON d.drive_id=j.drive_id
@@ -96,7 +96,7 @@ def schedule(authorization:str|None=Header(default=None)):
     for row in rows:
         moment=row["planned_utc"].replace(tzinfo=timezone.utc).astimezone(TZ)
         items.append({"id":row["id"],"account_id":row["account_id"],
-                      "username":row["username"],"day":str(row["local_day"]),
+                      "username":row["username"],"drive_id":row["drive_id"],"day":str(row["local_day"]),
                       "time":moment.strftime("%H:%M"),"status":row["status"],
                       "video":row["video"] or "Vídeo do Drive"})
     return {"timezone":"America/Fortaleza","today":str(today),"items":items}
@@ -187,6 +187,35 @@ def claim(payload:ClaimRequest,authorization:str|None=Header(default=None)):
 
 class TestClaim(BaseModel):
     account_id: int=Field(gt=0)
+
+@router.get("/jobs/test-preview/{account_id}")
+def preview_test_job(account_id:int,authorization:str|None=Header(default=None)):
+    """Read-only preview lets Windows validate and prepare media BEFORE claim.
+
+    Returns the same earliest eligible slot that claim-test will reserve.
+    Never transitions any row or authorizes an upload on its own.
+    """
+    authorize(authorization)
+    if account_id < 1:
+        raise HTTPException(422,detail="Conta inválida")
+    local_today=datetime.now(TZ).date()
+    with db_conn() as db:
+        setup(db)
+        with db.cursor() as c:
+            c.execute("""SELECT status FROM social_daily_jobs
+                WHERE account_id=%s AND local_day=%s""",(account_id,local_today))
+            current=c.fetchone()
+            if current and current["status"]!="planned":
+                raise HTTPException(409,detail="Existe um envio ou revisão para esta conta hoje.")
+            c.execute("""SELECT j.id,j.account_id,j.drive_id,j.caption,a.username
+                FROM social_daily_jobs j JOIN social_accounts a ON a.id=j.account_id
+                WHERE j.account_id=%s AND j.status='planned'
+                  AND j.local_day>=%s AND a.status='connected'
+                ORDER BY j.local_day,j.planned_utc,j.id LIMIT 1""",(account_id,local_today))
+            job=c.fetchone()
+    if not job:
+        raise HTTPException(409,detail="Nenhum agendamento disponível para teste nesta conta.")
+    return {"job":job}
 
 @router.post("/jobs/claim-test")
 def test_claim(payload:TestClaim,authorization:str|None=Header(default=None)):
