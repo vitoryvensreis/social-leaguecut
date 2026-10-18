@@ -36,6 +36,8 @@ def to_local(dt):
 def normalize(row):
     item=dict(row)
     item["scheduled_local"]=to_local(item["planned_utc"])
+    overdue=item["status"]=="planned" and item["planned_utc"]<datetime.now(timezone.utc).replace(tzinfo=None)
+    item["display_status"]="overdue" if overdue else item["status"]
     item["published_local"]=to_local(item.get("published_at"))
     item["views_display"]=str(item["views"]) if item.get("views") is not None else "N/D"
     item["likes_display"]=str(item["likes"]) if item.get("likes") is not None else "N/D"
@@ -86,11 +88,12 @@ def report(db):
                    LEFT JOIN social_drive_assets d ON d.drive_id=j.drive_id
                    {SNAPSHOT_JOIN}"""
         c.execute(f"""SELECT {fields} {common}
-            WHERE j.status IN ('planned','publishing')
+            WHERE j.status='planned' AND j.planned_utc>=UTC_TIMESTAMP()
             ORDER BY j.planned_utc ASC LIMIT 80""")
         upcoming=[normalize(row) for row in c.fetchall()]
         c.execute(f"""SELECT {fields} {common}
-            WHERE j.status NOT IN ('planned','publishing')
+            WHERE j.status<>'planned'
+               OR (j.status='planned' AND j.planned_utc<UTC_TIMESTAMP())
             ORDER BY COALESCE(j.published_at,j.planned_utc) DESC LIMIT 120""")
         history=[normalize(row) for row in c.fetchall()]
         c.execute("""SELECT local_day,
