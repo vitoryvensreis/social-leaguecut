@@ -68,6 +68,36 @@ def motor_health(authorization:str|None=Header(default=None)):
     authorize(authorization)
     return {"status":"ok","time_utc":datetime.now(timezone.utc).isoformat()}
 
+@router.get("/schedule")
+def schedule(authorization:str|None=Header(default=None)):
+    """Return today and tomorrow in Fortaleza-local time for Windows UI.
+
+    Schedule is read-only and includes no passwords or sensitive session data.
+    """
+    authorize(authorization)
+    now=datetime.now(TZ)
+    today=now.date()
+    tomorrow=today+timedelta(days=1)
+    with db_conn() as db:
+        setup(db)
+        with db.cursor() as c:
+            c.execute("""SELECT j.id,j.account_id,j.local_day,j.planned_utc,
+                      j.status,a.username,d.name AS video
+                FROM social_daily_jobs j
+                JOIN social_accounts a ON a.id=j.account_id
+                LEFT JOIN social_drive_assets d ON d.drive_id=j.drive_id
+                WHERE j.local_day BETWEEN %s AND %s
+                ORDER BY j.planned_utc,j.id LIMIT 150""",(today,tomorrow))
+            rows=c.fetchall()
+    items=[]
+    for row in rows:
+        moment=row["planned_utc"].replace(tzinfo=timezone.utc).astimezone(TZ)
+        items.append({"id":row["id"],"account_id":row["account_id"],
+                      "username":row["username"],"day":str(row["local_day"]),
+                      "time":moment.strftime("%H:%M"),"status":row["status"],
+                      "video":row["video"] or "Vídeo do Drive"})
+    return {"timezone":"America/Fortaleza","today":str(today),"items":items}
+
 @router.get("/accounts")
 def accounts(authorization:str|None=Header(default=None)):
     authorize(authorization)
