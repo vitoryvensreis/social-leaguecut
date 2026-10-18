@@ -1,5 +1,6 @@
 """Google Drive OAuth and controlled media import."""
-import os, io, re
+import os, io, re, secrets, logging
+from oauthlib.oauth2.rfc6749.errors import OAuth2Error
 from pathlib import Path
 from urllib.parse import quote
 from fastapi import APIRouter, Request, Form
@@ -14,9 +15,28 @@ router=APIRouter()
 ROOT=Path(__file__).resolve().parent.parent
 MEDIA=ROOT/"media"
 SCOPES=["https://www.googleapis.com/auth/drive.readonly"]
+logger=logging.getLogger("social.drive")
 
-def flow():
-    return Flow.from_client_config({"web":{"client_id":os.environ["GOOGLE_CLIENT_ID"],"client_secret":os.environ["GOOGLE_CLIENT_SECRET"],"auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","redirect_uris":[os.environ["GOOGLE_REDIRECT_URI"]]}},scopes=SCOPES,redirect_uri=os.environ["GOOGLE_REDIRECT_URI"])
+def flow(state=None, code_verifier=None):
+    """Build the same OAuth flow before and after Google's redirect.
+
+    Explicitly persist the PKCE verifier in the signed login session.
+    """
+    config={"web":{
+        "client_id":os.environ["GOOGLE_CLIENT_ID"],
+        "client_secret":os.environ["GOOGLE_CLIENT_SECRET"],
+        "auth_uri":"https://accounts.google.com/o/oauth2/auth",
+        "token_uri":"https://oauth2.googleapis.com/token",
+        "redirect_uris":[os.environ["GOOGLE_REDIRECT_URI"]]
+    }}
+    kwargs={"scopes":SCOPES,
+            "redirect_uri":os.environ["GOOGLE_REDIRECT_URI"],
+            "autogenerate_code_verifier":False}
+    if state is not None:
+        kwargs["state"]=state
+    if code_verifier is not None:
+        kwargs["code_verifier"]=code_verifier
+    return Flow.from_client_config(config,**kwargs)
 
 def crypt():
     return Fernet(os.environ["PROXY_ENCRYPTION_KEY"].encode())
@@ -49,26 +69,50 @@ def go(message):
 
 @router.post("/drive/connect")
 def connect(request:Request,csrf:str=Form(...)):
-    if not check(request,csrf): return JSONResponse({"error":"Forbidden"},403)
+    if not check(request,csrf):
+        return JSONResponse({"error":"Forbidden"},status_code=403)
     try:
-        f=flow()
-        url,state=f.authorization_url(access_type="offline",prompt="consent",include_granted_scopes="true")
+        verifier=secrets.token_urlsafe(64)
+        f=flow(code_verifier=verifier)
+        url,state=f.authorization_url(access_type="offline",prompt="consent")
         request.session["google_oauth_state"]=state
-        return RedirectResponse(url,303)
+        request.session["google_oauth_pkce"]=verifier
+        return RedirectResponse(url,status_code=303)
     except KeyError:
-        return go("Configure GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET e GOOGLE_REDIRECT_URI na VPS")
+        return go("Google Drive: faltam configurações OAuth no servidor")
+    except Exception as exc:
+        logger.warning("Drive authorization setup failed: %s",type(exc).__name__)
+        return go("Google Drive: erro ao iniciar autorização. Confira Client ID e URI cadastrada.")
 
 @router.get("/drive/callback")
-def callback(request:Request,code:str="",state:str=""):
+def callback(request:Request,code:str="",state:str="",error:str=""):
     from app.main import admin,db_connection
-    if not admin(request) or not state or state!=request.session.pop("google_oauth_state",None):return JSONResponse({"error":"OAuth state inválido"},403)
+    expected_state=request.session.pop("google_oauth_state",None)
+    verifier=request.session.pop("google_oauth_pkce",None)
+    if not admin(request) or not state or state!=expected_state:
+        return JSONResponse({"error":"Estado OAuth inválido. Faça login e reconecte o Drive."},status_code=403)
+    if error:
+        logger.warning("Drive authorization refused: %s", "access_denied" if error=="access_denied" else "other")
+        return go("O Google não autorizou o acesso ao Drive.")
+    if not code or not verifier:
+        return go("Google Drive: código ou verificador PKCE ausente. Reconecte o Drive.")
+    stage="token_exchange"
     try:
-        f=flow()
+        f=flow(state=state,code_verifier=verifier)
         f.fetch_token(code=code)
-        with db_connection() as db: init(db);store(db,f.credentials)
+        credentials=f.credentials
+        stage="database_storage"
+        with db_connection() as db:
+            init(db)
+            store(db,credentials)
         return go("Google Drive conectado")
-    except Exception:
-        return go("Não foi possível conectar Google Drive. Confira as credenciais OAuth.")
+    except Exception as exc:
+        category=getattr(exc,"error",None)
+        category=category if category in {"invalid_grant","invalid_client","access_denied","redirect_uri_mismatch","invalid_request"} else type(exc).__name__
+        logger.warning("Drive connection failed stage=%s error=%s",stage,category)
+        if stage=="token_exchange":
+            return go("Google Drive: falha ao trocar autorização por token ("+category+"). Refazer conexão.")
+        return go("Google Drive: autorização recebida, mas erro ao salvar no MySQL ("+category+").")
 
 @router.get("/drive/files")
 def files(request:Request):
