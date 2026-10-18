@@ -20,18 +20,18 @@ from app.campaign import router as campaign_router, settings as campaign_setting
 from app.instagram import router as instagram_router, init as init_instagram, diagnostics as instagram_diagnostics
 from app.bulk import router as bulk_router
 from app.insights import router as insights_router, dashboard as insights_dashboard
+from app.motor_api import router as motor_router
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 templates = Jinja2Templates(directory=str(ROOT / "app" / "templates"))
 app = FastAPI(title="Social LeagueCut", docs_url=None, redoc_url=None)
-app.include_router(proxies_router)
-app.include_router(routing_router)
+
 app.include_router(drive_router)
 app.include_router(campaign_router)
-app.include_router(instagram_router)
 app.include_router(bulk_router)
 app.include_router(insights_router)
+app.include_router(motor_router)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET") or "SET_SESSION_SECRET_IN_ENV_BEFORE_LOGIN", https_only=True, same_site="lax")
 
 def db_connection():
@@ -94,23 +94,10 @@ def home(request:Request):
         except Exception:
             data["error"]="Banco de dados indisponível. Verifique as configurações na VPS."
             data.update(accounts=[],posts=[],queue_count=0)
-    data["proxy_configured"]=bool(os.getenv("PROXY_ENCRYPTION_KEY"))
+    # Instagram authentication is exclusively local; no proxies or remote logins.
     data["proxies"]=[]
-    if admin(request) and data["proxy_configured"]:
-        try:
-            with db_connection() as db:
-                data["proxies"]=get_proxies(db)
-        except Exception:
-            data["error"]="Não foi possível consultar proxies"
     data["routes"]=[]
     data["queue_preview"]=[]
-    if admin(request):
-        try:
-            with db_connection() as db:
-                data["routes"]=list_routes(db)
-                data["queue_preview"]=preview(db)
-        except Exception:
-            data["error"]="Não foi possível consultar a distribuição entre contas e proxies"
     data["google_configured"]=all(os.getenv(k) for k in ("GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET","GOOGLE_REDIRECT_URI"))
     data["campaign"]=None
     data["campaign_summary"]={"asset_count":0,"job_counts":{},"jobs":[]}
@@ -124,7 +111,7 @@ def home(request:Request):
     data["campaign_captions_text"]="\n---\n".join(stored_captions(data["campaign"]))
     data["campaign_start_time"]=mysql_clock(data["campaign"]["start_time"]).strftime("%H:%M") if data["campaign"] else "10:00"
     data["campaign_end_time"]=mysql_clock(data["campaign"]["end_time"]).strftime("%H:%M") if data["campaign"] else "19:00"
-    data["instagram_enabled"]=bool(os.getenv("INSTAGRAM_ENCRYPTION_KEY"))
+    data["instagram_enabled"]=False
     data["insights"]={"rows":[],"published":0,"last_known_views":0}
     if admin(request):
         try:
@@ -132,13 +119,6 @@ def home(request:Request):
                 data["insights"]=insights_dashboard(db)
         except Exception:
             data["error"]="Não foi possível consultar o histórico de postagens."
-    data["instagram_diagnostics"]=[]
-    if admin(request):
-        try:
-            with db_connection() as db:
-                data["instagram_diagnostics"]=instagram_diagnostics(db)
-        except Exception:
-            data["error"]="Não foi possível consultar os diagnósticos de autenticação."
     return templates.TemplateResponse(request,"index.html",data)
 
 @app.post("/login")
@@ -171,7 +151,6 @@ def add_account(request:Request,username:str=Form(...),csrf:str=Form(...)):
                 cur.execute("INSERT INTO social_accounts(username) VALUES(%s)",(name,))
                 account_id=cur.lastrowid
             db.commit()
-            auto_assign_proxy(db,account_id)
     except pymysql.err.IntegrityError:
         return redirect("Conta já cadastrada")
     return redirect()
