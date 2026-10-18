@@ -18,26 +18,106 @@
 <form method="post" action="/campaign/sync"><input type="hidden" name="csrf" value="{{csrf}}"><button class="secondary">Sincronizar vídeos do Drive</button></form>
 <form method="post" action="/campaign/generate" onsubmit="return confirm('Gerar/recalcular até 30 dias de programação? Rascunhos futuros existentes serão atualizados; nenhuma publicação será enviada agora.')"><input type="hidden" name="csrf" value="{{csrf}}"><button>Gerar 30 dias de programação</button></form>
 </div>
-{% if campaign_summary.jobs %}<div style="overflow-x:auto"><table><tr><th>Dia</th><th>Conta</th><th>Vídeo</th><th>Status</th></tr>{% for item in campaign_summary.jobs %}<tr><td>{{item.local_day}}</td><td>@{{item.username}}</td><td>{{item.name or 'Arquivo indisponível'}}</td><td>{{item.status}}</td></tr>{% endfor %}</table></div>{% endif %}
+{% if campaign_summary.jobs %}<div style="overflow-x:auto"><table><tr><th>Dia</th><th>Conta</th><th>Vídeo</th><th>Status</th></tr>{% for item in campaign_summary.jobs %}<tr><td>#{{item.id}} · {{item.local_day}}</td><td>@{{item.username}}</td><td>{{item.name or 'Arquivo indisponível'}}</td><td>{{item.status}}</td></tr>{% endfor %}</table></div>{% endif %}
 </section>
 <div class="grid"><section class="card"><h2>Adicionar conta</h2><form action="/accounts" method="post"><input type="hidden" name="csrf" value="{{csrf}}"><label>Usuário do Instagram</label><input name="username" placeholder="@perfil" required maxlength="30"><button>Adicionar perfil</button></form><h2>Contas</h2><table><tr><th>Perfil</th><th>Status</th></tr>{% for a in accounts %}<tr><td>@{{a.username}}</td><td><span class="tag">{{a.status}}</span></td></tr>{% else %}<tr><td colspan="2" class="muted">Nenhuma conta cadastrada</td></tr>{% endfor %}</table></section>
 <section class="card"><h2>Planejar publicação</h2><form action="/posts" method="post"><input type="hidden" name="csrf" value="{{csrf}}"><label>Nome do conteúdo</label><input name="title" required maxlength="160"><label>Legenda</label><textarea name="caption" rows="4" maxlength="2200"></textarea><label>Data e hora</label><input type="datetime-local" name="scheduled_at" required><label>Selecionar contas</label><div class="chips">{% for a in accounts %}<label><input type="checkbox" name="account_ids" value="{{a.id}}" style="width:auto;margin:0 5px 0 0">@{{a.username}}</label>{% else %}<p class="muted">Cadastre uma conta primeiro.</p>{% endfor %}</div><button>Salvar rascunho</button></form></section></div>
+<section class="card" id="bulk-import-proxies"><h2>Importar e testar proxies em lote</h2>
+<p class="muted">Baixe a lista no Webshare e cole aqui. Aceita IP:PORTA:USUARIO:SENHA ou linhas CSV/TSV. Credenciais serão criptografadas e não vão para o GitHub. Duplicatas são ignoradas.</p>
+<form method="post" action="/bulk/proxies" autocomplete="off"><input type="hidden" name="csrf" value="{{csrf}}"><label>Conteúdo do arquivo de proxies</label><textarea name="lines" rows="4" placeholder="Cole aqui o export do Webshare" required autocomplete="off"></textarea><button>Importar proxies</button></form>
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px">
+<button type="button" class="secondary" onclick="testAllProxies()">Testar todos os proxies</button>
+<form method="post" action="/bulk/proxies/remove-failed" onsubmit="return confirm('Excluir somente os proxies testados como falhos e NÃO vinculados a contas?')"><input type="hidden" name="csrf" value="{{csrf}}"><input type="hidden" name="confirmed" value="yes"><button type="submit" class="secondary">Excluir falhos sem uso</button></form></div>
+<div id="proxy-batch-progress" class="muted" role="status" style="margin-top:12px"></div></section>
 <section class="card"><h2>Proxies Webshare</h2><p class="muted">Cadastre vários proxies e teste individualmente. A escolha do ativo é manual; não alternamos IPs durante sessões do Instagram.</p>
 {% if not proxy_configured %}<div class="notice">Configure PROXY_ENCRYPTION_KEY no .env da VPS para habilitar o cadastro seguro.</div>{% else %}
 <form method="post" action="/proxies/add"><input type="hidden" name="csrf" value="{{csrf}}">
 <div class="grid"><div><label>Nome do proxy</label><input name="label" placeholder="Webshare 01" required maxlength="80"></div><div><label>Host</label><input name="host" placeholder="p.webshare.io" required maxlength="255"></div><div><label>Porta</label><input type="number" name="port" min="1" max="65535" placeholder="80" required></div><div><label>Usuário do proxy</label><input name="username" autocomplete="off"></div><div><label>Senha do proxy</label><input type="password" name="password" autocomplete="new-password"></div></div><button type="submit">Adicionar proxy</button></form>
 <div style="overflow-x:auto"><table><thead><tr><th>Proxy</th><th>Host</th><th>Resultado</th><th>Ações</th></tr></thead><tbody>
 {% for p in proxies %}<tr><td>{{p.label}} {% if p.active %}<span class="tag">ATIVO</span>{% endif %}</td><td>{{p.host}}:{{p.port}}</td><td>{{p.last_result}}{% if p.last_ip %} — {{p.last_ip}}{% endif %}</td><td><form method="post" action="/proxies/{{p.id}}/test" style="display:inline"><input type="hidden" name="csrf" value="{{csrf}}"><button class="secondary">Testar</button></form> <form method="post" action="/proxies/{{p.id}}/activate" style="display:inline"><input type="hidden" name="csrf" value="{{csrf}}"><button class="secondary">Ativar</button></form> <form method="post" action="/proxies/{{p.id}}/delete" style="display:inline" onsubmit="return confirm('Excluir proxy?')"><input type="hidden" name="csrf" value="{{csrf}}"><button class="secondary">Excluir</button></form></td></tr>{% else %}<tr><td colspan="4" class="muted">Nenhum proxy cadastrado</td></tr>{% endfor %}
-</tbody></table></div>{% endif %}</section><section class="card" id="conectar-instagram"><h2>Conectar Instagram</h2>
+</tbody></table></div>{% endif %}</section><section class="card" id="bulk-import-instagram"><h2>Importar perfis Instagram em lote</h2>
+<p class="muted">Copie três colunas da planilha: usuário, e-mail e senha. Cole somente no painel HTTPS. As senhas ficam criptografadas no MySQL. O sistema não realiza login automaticamente ao importar.</p>
+<form method="post" action="/bulk/accounts" autocomplete="off"><input type="hidden" name="csrf" value="{{csrf}}">
+<label>Perfis da planilha</label><textarea name="lines" rows="5" placeholder="Cole as colunas usuario, email, senha da planilha" required autocomplete="off"></textarea>
+<button type="submit">Importar contas com segurança</button></form>
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px">
+<button type="button" class="secondary" onclick="testAllAccounts()">Testar conexões das contas</button>
+<form method="post" action="/bulk/accounts/remove-failed" onsubmit="return confirm('Excluir apenas contas marcadas como falhas e sem publicações? Os agendamentos dessas contas também serão excluídos.')"><input type="hidden" name="csrf" value="{{csrf}}"><input type="hidden" name="confirmed" value="yes"><button class="secondary">Excluir contas falhas</button></form></div>
+<div id="account-batch-progress" class="muted" role="status" style="margin-top:12px"></div>
+<p class="muted">O teste de contas é sequencial e interrompe ao encontrar verificação de segurança ou bloqueio; não usa outros proxies para contornar a restrição.</p></section>
+<section class="card" id="conectar-instagram"><h2>Conectar Instagram</h2>
 <p class="muted">Conecte cada perfil com sua senha e, se necessário, um código de autenticação de dois fatores. As credenciais e sessões ficam criptografadas no banco. Usaremos o proxy fixo associado à conta — sem trocar IP quando houver bloqueios ou verificações.</p>
 {% if not instagram_enabled %}<div class="notice">Antes de conectar, configure INSTAGRAM_ENCRYPTION_KEY no .env da VPS e substitua a chave SSH de deploy exposta anteriormente.</div>{% endif %}
 {% for a in accounts %}<div style="padding:16px 0;border-top:1px solid #343641"><div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:12px"><strong>@{{a.username}}</strong><span class="tag">{{a.status}}</span></div>
 <form method="post" action="/instagram/accounts/{{a.id}}/connect"><input type="hidden" name="csrf" value="{{csrf}}">
-<div class="grid"><div><label>Senha do Instagram (não ficará visível após salvar)</label><input type="password" name="password" required autocomplete="off"></div><div><label>Código 2FA (somente se solicitado)</label><input name="verification_code" inputmode="numeric" autocomplete="one-time-code" placeholder="Opcional"></div></div>
+<div class="grid"><div><label>Senha do Instagram (não ficará visível após salvar)</label><input type="password" name="password" autocomplete="off" placeholder="Opcional após importar senha"></div><div><label>Código 2FA (somente se solicitado)</label><input name="verification_code" inputmode="numeric" autocomplete="one-time-code" placeholder="Opcional"></div></div>
 <button {% if not instagram_enabled %}disabled{% endif %}>Conectar / reconectar</button></form>
 {% if a.status=='connected' %}<form method="post" action="/instagram/accounts/{{a.id}}/disconnect" onsubmit="return confirm('Remover credenciais e sessão deste perfil?')" style="margin-top:10px"><input type="hidden" name="csrf" value="{{csrf}}"><button type="submit" class="secondary">Desconectar conta</button></form>{% endif %}</div>
 {% else %}<p class="muted">Cadastre uma conta acima primeiro.</p>{% endfor %}
 <p class="muted">A conexão utiliza a biblioteca Instagrapi (não oficial). Pedidos de verificação ou limites do Instagram interrompem a tentativa; não há fallback automático pela VPS.</p>
 </section>
-<section class="card"><h2>Contas → Proxies</h2><p class="muted">Associe cada conta a um IP fixo de saída. Nenhuma publicação será enviada nesta etapa.</p><div style="overflow-x:auto"><table><tr><th>Conta</th><th>Proxy atual</th><th>Alterar</th></tr>{% for a in routes %}<tr><td>@{{a.username}}</td><td>{{a.proxy_label or 'Não associado'}} {% if a.proxy_status %}({{a.proxy_status}}){% endif %}</td><td><form method="post" action="/accounts/{{a.account_id}}/route" style="display:flex;gap:8px"><input type="hidden" name="csrf" value="{{csrf}}"><select name="proxy_id" style="background:#101218;color:white;border:1px solid #444;padding:10px;border-radius:8px"><option value="0">Nenhum</option>{% for p in proxies %}<option value="{{p.id}}" {% if a.proxy_id==p.id %}selected{% endif %}>{{p.label}} — {{p.last_result}}</option>{% endfor %}</select><button class="secondary">Salvar</button></form></td></tr>{% else %}<tr><td colspan="3" class="muted">Cadastre uma conta para associar um proxy.</td></tr>{% endfor %}</table></div></section><section class="card"><h2>Prévia da fila</h2><p class="muted">Somente planejamento: o motor de publicação ainda não está habilitado.</p><div style="overflow-x:auto"><table><tr><th>Conteúdo</th><th>Conta</th><th>Proxy</th><th>Prontidão</th></tr>{% for q in queue_preview %}<tr><td>{{q.title}}</td><td>@{{q.username}}</td><td>{{q.proxy_label or '—'}}</td><td>{{q.readiness}}</td></tr>{% else %}<tr><td colspan="4" class="muted">Nenhum item planejado.</td></tr>{% endfor %}</table></div></section><section class="card"><h2>Google Drive · Biblioteca de vídeos</h2><p class="muted">Conecte seu Drive em modo somente leitura, liste vídeos e importe os arquivos selecionados para armazenamento privado da VPS. Limite inicial: 500 MB por vídeo.</p>{% if google_configured %}<form method="post" action="/drive/connect"><input type="hidden" name="csrf" value="{{csrf}}"><button>Conectar Google Drive</button></form><div style="margin-top:14px"><button class="secondary" type="button" onclick="loadDrive()">Listar vídeos do Drive</button></div><div id="drive-list" class="muted" style="margin-top:16px"></div><script>async function loadDrive(){const el=document.getElementById('drive-list');el.textContent='Carregando...';try{const res=await fetch('/drive/files');const j=await res.json();if(!res.ok)throw Error(j.error||'Erro');if(!j.connected){el.textContent='Conecte o Google Drive primeiro';return}el.replaceChildren();(j.files||[]).forEach(f=>{const row=document.createElement('form');row.method='post';row.action='/drive/import';row.style.marginBottom='10px';const name=document.createElement('span');name.textContent=f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB) ';row.appendChild(name);for(const [k,v] of [['csrf',{{csrf|tojson}}],['file_id',f.id]]){const input=document.createElement('input');input.type='hidden';input.name=k;input.value=v;row.appendChild(input)}const btn=document.createElement('button');btn.type='submit';btn.textContent='Importar';row.appendChild(btn);el.appendChild(row)});if(!j.files?.length)el.textContent='Nenhum vídeo MP4/MOV encontrado.'}catch(e){el.textContent=e.message}}</script>{% else %}<div class="notice">Configure o OAuth do Google no arquivo .env da VPS para ativar a integração.</div>{% endif %}</section><section class="card"><h2>Calendário de rascunhos</h2><table><tr><th>Conteúdo</th><th>Agendado para</th><th>Situação</th></tr>{% for p in posts %}<tr><td>{{p.title}}</td><td>{{p.scheduled_at}}</td><td>{{p.status}}</td></tr>{% else %}<tr><td colspan="3" class="muted">Nenhuma publicação planejada</td></tr>{% endfor %}</table></section>{% endif %}
-</main></body></html>
+<section class="card"><h2>Contas → Proxies</h2><p class="muted">Associe cada conta a um IP fixo de saída. Nenhuma publicação será enviada nesta etapa.</p><div style="overflow-x:auto"><table><tr><th>Conta</th><th>Proxy atual</th><th>Alterar</th></tr>{% for a in routes %}<tr><td>@{{a.username}}</td><td>{{a.proxy_label or 'Não associado'}} {% if a.proxy_status %}({{a.proxy_status}}){% endif %}</td><td><form method="post" action="/accounts/{{a.account_id}}/route" style="display:flex;gap:8px"><input type="hidden" name="csrf" value="{{csrf}}"><select name="proxy_id" style="background:#101218;color:white;border:1px solid #444;padding:10px;border-radius:8px"><option value="0">Nenhum</option>{% for p in proxies %}<option value="{{p.id}}" {% if a.proxy_id==p.id %}selected{% endif %}>{{p.label}} — {{p.last_result}}</option>{% endfor %}</select><button class="secondary">Salvar</button></form></td></tr>{% else %}<tr><td colspan="3" class="muted">Cadastre uma conta para associar um proxy.</td></tr>{% endfor %}</table></div></section><section class="card"><h2>Prévia da fila</h2><p class="muted">Somente planejamento: o motor de publicação ainda não está habilitado.</p><div style="overflow-x:auto"><table><tr><th>Conteúdo</th><th>Conta</th><th>Proxy</th><th>Prontidão</th></tr>{% for q in queue_preview %}<tr><td>{{q.title}}</td><td>@{{q.username}}</td><td>{{q.proxy_label or '—'}}</td><td>{{q.readiness}}</td></tr>{% else %}<tr><td colspan="4" class="muted">Nenhum item planejado.</td></tr>{% endfor %}</table></div></section><section class="card"><h2>Google Drive · Biblioteca de vídeos</h2><p class="muted">Conecte seu Drive em modo somente leitura, liste vídeos e importe os arquivos selecionados para armazenamento privado da VPS. Limite inicial: 500 MB por vídeo.</p>{% if google_configured %}<form method="post" action="/drive/connect"><input type="hidden" name="csrf" value="{{csrf}}"><button>Conectar Google Drive</button></form><div style="margin-top:14px"><button class="secondary" type="button" onclick="loadDrive()">Listar vídeos do Drive</button></div><div id="drive-list" class="muted" style="margin-top:16px"></div><script>async function loadDrive(){const el=document.getElementById('drive-list');el.textContent='Carregando...';try{const res=await fetch('/drive/files');const j=await res.json();if(!res.ok)throw Error(j.error||'Erro');if(!j.connected){el.textContent='Conecte o Google Drive primeiro';return}el.replaceChildren();(j.files||[]).forEach(f=>{const row=document.createElement('form');row.method='post';row.action='/drive/import';row.style.marginBottom='10px';const name=document.createElement('span');name.textContent=f.name+' ('+Math.round(Number(f.size||0)/1048576)+' MB) ';row.appendChild(name);for(const [k,v] of [['csrf',{{csrf|tojson}}],['file_id',f.id]]){const input=document.createElement('input');input.type='hidden';input.name=k;input.value=v;row.appendChild(input)}const btn=document.createElement('button');btn.type='submit';btn.textContent='Importar';row.appendChild(btn);el.appendChild(row)});if(!j.files?.length)el.textContent='Nenhum vídeo MP4/MOV encontrado.'}catch(e){el.textContent=e.message}}</script>{% else %}<div class="notice">Configure o OAuth do Google no arquivo .env da VPS para ativar a integração.</div>{% endif %}</section><section class="card" id="insights"><h2>Reels publicados · Links e visualizações</h2>
+<p class="muted">Os links aparecem após registrar uma publicação real. As métricas são consultadas no máximo uma vez por dia por Reel e podem estar indisponíveis quando o Instagram não fornecer contagem de views.</p>
+<div class="grid"><div><div class="stat">{{insights.published}}</div><span class="muted">Reels registrados</span></div><div><div class="stat">{{insights.last_known_views}}</div><span class="muted">Soma das últimas views disponíveis (contagens com datas diferentes)</span></div></div>
+<div style="overflow-x:auto"><table><tr><th>Perfil</th><th>Reel</th><th>Views</th><th>Última atualização</th></tr>
+{% for item in insights.rows %}<tr><td>@{{item.username}}</td><td>{% if item.permalink %}<a href="{{item.permalink}}" target="_blank" rel="noopener noreferrer">Ver Reel ↗</a>{% else %}—{% endif %}</td><td>{{item.last_views if item.last_views is not none else 'N/D'}}</td><td>{{item.last_checked or 'Aguardando'}}</td></tr>
+{% else %}<tr><td colspan="4" class="muted">Nenhuma publicação registrada ainda.</td></tr>{% endfor %}</table></div>
+<h2 style="margin-top:24px">Registrar link de publicação</h2>
+<p class="muted">Enquanto o publicador automático não estiver ativo, você pode registrar manualmente um Reel usando o ID do agendamento. Quando o motor de publicação estiver pronto, essa informação será preenchida automaticamente.</p>
+<form id="manual-record-form" onsubmit="return registerReel(event)"><label>ID do agendamento</label><input name="job_id" type="number" min="1" required><label>Link do Instagram</label><input name="url" type="url" placeholder="https://www.instagram.com/reel/..." required><label>Media PK (opcional)</label><input name="media_pk" placeholder="Número retornado pelo Instagram"><button>Salvar link publicado</button></form>
+</section>
+<section class="card"><h2>Calendário de rascunhos</h2><table><tr><th>Conteúdo</th><th>Agendado para</th><th>Situação</th></tr>{% for p in posts %}<tr><td>{{p.title}}</td><td>{{p.scheduled_at}}</td><td>{{p.status}}</td></tr>{% else %}<tr><td colspan="3" class="muted">Nenhuma publicação planejada</td></tr>{% endfor %}</table></section>{% endif %}
+<script>
+const socialCsrf={{csrf|tojson}};
+let bulkActive=false;
+const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function testAllProxies(){
+  if(bulkActive)return;bulkActive=true;
+  const target=document.getElementById('proxy-batch-progress');
+  try{
+    const ids=[{% for p in proxies %}{{p.id}},{% endfor %}];
+    if(!ids.length){target.textContent='Cadastre proxies antes do teste.';return}
+    for(let i=0;i<ids.length;i++){
+      target.textContent='Testando proxy '+(i+1)+'/'+ids.length+'...';
+      const data=new URLSearchParams({csrf:socialCsrf});
+      const response=await fetch('/proxies/'+ids[i]+'/test',{method:'POST',body:data,credentials:'same-origin'});
+      if(!response.ok){target.textContent='Erro HTTP '+response.status;return}
+      await delay(1200);
+    }
+    target.textContent='Teste concluído. Atualizando tabela...';window.location.reload();
+  }catch(e){target.textContent='Erro de conexão durante o teste.'}
+  finally{bulkActive=false}
+}
+async function testAllAccounts(){
+  if(bulkActive)return;bulkActive=true;
+  const target=document.getElementById('account-batch-progress');
+  try{
+    const ids=[{% for a in accounts %}{{a.id}},{% endfor %}];
+    if(!ids.length){target.textContent='Importe os perfis primeiro.';return}
+    for(let i=0;i<ids.length;i++){
+      target.textContent='Verificando perfil '+(i+1)+'/'+ids.length+'...';
+      const response=await fetch('/instagram/accounts/'+ids[i]+'/check',{
+        method:'POST',body:new URLSearchParams({csrf:socialCsrf}),credentials:'same-origin'
+      });
+      const data=await response.json();
+      if(!response.ok){target.textContent='Teste interrompido: '+(data.message||'erro');return}
+      target.textContent='Perfil '+(i+1)+': '+data.status+' — '+data.message;
+      if(['needs_verification','paused'].includes(data.status)){
+        target.textContent+=' Teste interrompido para não forçar novas autenticações.';return;
+      }
+      if(i+1<ids.length)await delay(9000);
+    }
+    target.textContent='Testes terminados. Atualizando tabela...';window.location.reload();
+  }catch(e){target.textContent='Erro ao consultar a conta.'}
+  finally{bulkActive=false}
+}
+function registerReel(event){
+  event.preventDefault();const form=event.target;
+  const id=form.elements.job_id.value;const url=form.elements.url.value;const media_pk=form.elements.media_pk.value;
+  const post=document.createElement('form');post.method='post';post.action='/insights/posts/'+encodeURIComponent(id)+'/record';
+  for(const [name,value] of Object.entries({csrf:socialCsrf,url,media_pk})){
+    const field=document.createElement('input');field.type='hidden';field.name=name;field.value=value;post.appendChild(field)
+  }
+  document.body.appendChild(post);post.submit();return false;
+}
+</script></main></body></html>
