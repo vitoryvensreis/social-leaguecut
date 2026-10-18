@@ -108,9 +108,11 @@ def collect_daily(db, cap_total=80, cap_per_account=5):
           JOIN social_accounts a ON a.id=j.account_id
           JOIN social_instagram_auth auth ON auth.account_id=j.account_id
           LEFT JOIN social_video_metrics m ON m.job_id=j.id AND m.capture_day=%s
+          LEFT JOIN (SELECT job_id,MAX(capture_day) AS latest FROM social_video_metrics
+                    GROUP BY job_id) previous ON previous.job_id=j.id
           WHERE j.status='published' AND j.permalink IS NOT NULL
             AND a.status='connected' AND m.id IS NULL
-          ORDER BY j.account_id ASC, j.id DESC
+          ORDER BY j.account_id ASC, COALESCE(previous.latest,'1970-01-01') ASC, j.id DESC
           LIMIT 2000""",(today,))
         candidates=c.fetchall()
     per_account={}
