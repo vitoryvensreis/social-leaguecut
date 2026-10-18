@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Social LeagueCut Reel metrics once daily
+
+[Timer]
+OnCalendar=*-*-* 07:30:00 America/Fortaleza
+Persistent=true
+RandomizedDelaySec=5m
+Unit=social-leaguecut-metrics.service
+
+[Install]
+WantedBy=timers.target
