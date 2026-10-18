@@ -77,6 +77,13 @@ def proxy_for_account(db,account_id:int):
 def failure_reason(exc):
     """Classify without exposing exception text or triggering automatic retries."""
     name=type(exc).__name__
+    if name == "UnknownError":
+        code=str(getattr(exc,"error_type","") or "").lower()
+        category=str(getattr(exc,"message_category","") or "").lower()
+        message=str(getattr(exc,"message","") or "").lower()
+        if code=="needs_upgrade" or category=="app_out_of_date" or "out of date" in message:
+            return "paused","Instagram sinalizou versão de aplicativo desatualizada. Verifique a versão do Instagrapi; não repita logins."
+        return "paused","Resposta não classificada da API privada. Verifique a versão do Instagrapi e aguarde antes de tentar novamente."
     if name in ("TwoFactorRequired","ChallengeRequired","ChallengeError",
                 "ChallengeUnknownStep","CheckpointRequired","ConsentRequired"):
         return "needs_verification","Instagram exige verificação. Confira o aplicativo antes de tentar novamente."
