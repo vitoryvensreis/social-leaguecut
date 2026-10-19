@@ -18,6 +18,26 @@ class ValidationTests(unittest.TestCase):
         with self.assertRaises(ValidationError):multibrowser.ClickPayload(x=970,y=10)
     def test_key_whitelist(self):
         with self.assertRaises(ValidationError):multibrowser.KeyPayload(key="Control+Shift+I")
+
+    def test_wheel_and_navigation_bounds(self):
+        self.assertEqual(multibrowser.WheelPayload(dx=0,dy=650).dy,650)
+        with self.assertRaises(ValidationError):
+            multibrowser.WheelPayload(dx=0,dy=9000)
+        with self.assertRaises(ValidationError):
+            multibrowser.NavigatePayload(action="evil")
+        self.assertEqual(multibrowser.NavigatePayload(action="back").action,"back")
+        self.assertEqual(multibrowser.KeyPayload(key="ControlOrMeta+A").key,"ControlOrMeta+A")
+
+    def test_direct_keyboard_capture_and_no_modal_recording(self):
+        s=(Path(__file__).parent.parent/"app/templates/multibrowser.html").read_text(encoding="utf-8")
+        self.assertIn('id="remoteKeyboard"',s)
+        self.assertIn('oninput="remoteKeyboardInput(event)"',s)
+        self.assertIn('onwheel="remoteWheel(event)"',s)
+        self.assertIn("const recording=(img.id==='trainScreen'&&el('trainRecord').checked)",s)
+        self.assertIn("remoteCommand('type'",s)
+        self.assertIn("remoteCommand('wheel'",s)
+        self.assertIn("recorded===false",s)
+
     def test_emoji_caption(self):
         c=multibrowser.CaptionPayload(title="Padrão",body="Olá 🚀 #Negócios")
         self.assertIn("🚀",c.body)
@@ -33,14 +53,15 @@ class ValidationTests(unittest.TestCase):
                 self.assertNotEqual(a,b)
                 self.assertTrue(str(a).startswith(root))
                 with self.assertRaises(RuntimeError):worker._directory(1,"../../root")
-    def test_training_tabs_and_horizontal_portrait_cards(self):
+    def test_training_tabs_and_horizontal_landscape_cards(self):
         s=(Path(__file__).parent.parent/"app/templates/multibrowser.html").read_text(encoding="utf-8")
         self.assertIn('id="tab-automacao"',s)
         self.assertIn('id="tab-treino"',s)
         self.assertIn('id="tab-contas"',s)
         self.assertIn('id="tab-legendas"',s)
         self.assertIn('id="tilesRail"',s)
-        self.assertIn('aspect-ratio:9/16',s)
+        self.assertIn('aspect-ratio:4/3',s)
+        self.assertIn('clamp(460px,28vw,700px)',s)
         self.assertIn('flex-wrap:nowrap!important',s)
         self.assertIn('id="trainScreen"',s)
         self.assertIn('id="trainRecord"',s)
@@ -160,6 +181,39 @@ class BrowserTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('type="password"',html)
         self.assertIn("input.value=''",html)
         self.assertIn("img.naturalWidth||960",html)
+
+
+    async def test_remote_scroll(self):
+        b=BrowserManager()
+        b.active_slot=1
+        b.page=MagicMock()
+        b.page.mouse.wheel=AsyncMock()
+        await b.wheel(1,0,370)
+        b.page.mouse.wheel.assert_awaited_once_with(0,370)
+
+    async def test_remote_browsing_history(self):
+        b=BrowserManager()
+        b.active_slot=1
+        b.page=MagicMock()
+        b.page.go_back=AsyncMock()
+        await b.navigate(1,"back")
+        b.page.go_back.assert_awaited_once_with(wait_until="domcontentloaded",timeout=15000)
+        with self.assertRaises(RuntimeError):
+            await b.navigate(1,"open-arbitrary-url")
+
+    async def test_login_recording_guard_detects_password_field(self):
+        b=BrowserManager()
+        b.active_slot=1
+        b.page=MagicMock()
+        b.page.url="https://www.instagram.com/"
+        element=MagicMock()
+        element.count=AsyncMock(return_value=1)
+        b.page.locator.return_value=element
+        self.assertTrue(await b.is_login_screen(1))
+        element.count=AsyncMock(return_value=0)
+        self.assertFalse(await b.is_login_screen(1))
+        b.page.url="https://www.instagram.com/accounts/login/"
+        self.assertTrue(await b.is_login_screen(1))
 
     async def test_text_not_saved(self):
         b=BrowserManager()
