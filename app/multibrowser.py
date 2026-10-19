@@ -117,6 +117,10 @@ def upsert(slot:int,payload:AccountPayload,request:Request):
     with db_conn() as db:
         init(db)
         with db.cursor() as c:
+            c.execute("SELECT slot FROM social_mb_accounts WHERE username=%s",(username,))
+            existing=c.fetchone()
+            if existing and int(existing["slot"])!=slot:
+                raise HTTPException(409,"Essa conta já ocupa outra posição")
             try:
                 c.execute("""INSERT INTO social_mb_accounts(slot,username,label) VALUES(%s,%s,%s)
                   ON DUPLICATE KEY UPDATE username=VALUES(username),label=VALUES(label)""",
