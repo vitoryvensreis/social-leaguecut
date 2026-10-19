@@ -1,7 +1,8 @@
 """Persistent single-active-browser manager for 16 fixed Instagram slots."""
 import asyncio, os, re
 from pathlib import Path
-VIEWPORT={"width":960,"height":720}
+VIEWPORT={"width":1280,"height":800}
+from .training_selectors import INSPECT_TARGET_JS
 
 class BrowserManager:
     def __init__(self):
@@ -34,7 +35,7 @@ class BrowserManager:
                 headless=os.getenv("LEAGUECUT_BROWSER_HEADLESS","1")=="1" or not os.getenv("DISPLAY")
                 self.context=await self.driver.chromium.launch_persistent_context(
                     user_data_dir=str(self._directory(slot,username)),headless=headless,
-                    viewport=VIEWPORT,device_scale_factor=1,accept_downloads=False,
+                    viewport=VIEWPORT,device_scale_factor=1,is_mobile=False,has_touch=False,accept_downloads=False,
                     locale="pt-BR",args=["--no-first-run","--disable-dev-shm-usage"])
                 self.page=self.context.pages[0] if self.context.pages else await self.context.new_page()
                 self.active_slot,self.active_username=slot,username
@@ -92,17 +93,58 @@ class BrowserManager:
             except Exception:
                 raise RuntimeError("Falha ao enviar tecla. Verifique se o navegador continua aberto.") from None
 
+    async def _is_sensitive(self,page):
+        url=str(page.url or "").lower()
+        if any(t in url for t in (
+            "/accounts/login","/challenge/","/two_factor/","/accounts/signup",
+            "/accounts/password","/checkpoint/","/accounts/onetap")):
+            return True
+        try:
+            return await page.locator('input[type="password"],input[autocomplete="one-time-code"]').count()>0
+        except Exception:
+            return False
+
     async def is_login_screen(self,slot):
-        """Never record clicks on a screen with a password field or login URL."""
+        """Never record credentials, login or verification screens."""
+        async with self.lock:
+            return await self._is_sensitive(self._page_for(slot))
+
+    async def click_and_describe(self,slot,x,y):
+        """Capture a DOM selector and click under one browser lock."""
         async with self.lock:
             page=self._page_for(slot)
-            url=str(page.url or "").lower()
-            if any(t in url for t in ("/accounts/login","/challenge/","/two_factor/","/accounts/signup")):
-                return True
-            try:
-                return await page.locator('input[type="password"]').count()>0
-            except Exception:
-                return False
+            protected=await self._is_sensitive(page)
+            target={"selector":None,"label":"","tag":""}
+            if not protected:
+                try:
+                    value=await page.evaluate(INSPECT_TARGET_JS,{"x":x,"y":y})
+                    if isinstance(value,dict):
+                        target={
+                            "selector":str(value["selector"])[:1024] if value.get("selector") else None,
+                            "label":str(value.get("label") or "")[:100],
+                            "tag":str(value.get("tag") or "")[:20]
+                        }
+                except Exception:
+                    pass  # Coordinates remain available for supervised replay.
+            await page.mouse.click(x,y)
+            return {"protected":protected,**target}
+
+    async def replay_training_click(self,slot,x,y,selector=None):
+        """Try a unique HTML target, then recorded desktop coordinates."""
+        async with self.lock:
+            page=self._page_for(slot)
+            if await self._is_sensitive(page):
+                raise RuntimeError("Replay bloqueado durante login ou verificação")
+            if selector:
+                try:
+                    target=page.locator(selector)
+                    if await target.count()==1 and await target.is_visible():
+                        await target.click(timeout=3000)
+                        return {"method":"element","note":"Elemento HTML localizado"}
+                except Exception:
+                    pass
+            await page.mouse.click(x,y)
+            return {"method":"coordinates","note":"Elemento não encontrado; usadas coordenadas do desktop"}
 
     async def wheel(self,slot,dx,dy):
         """Scroll the active Chromium page like a physical mouse wheel."""
