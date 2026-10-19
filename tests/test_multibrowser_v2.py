@@ -48,6 +48,27 @@ class ValidationTests(unittest.TestCase):
         self.assertIn("login-password",s)
         self.assertIn("trainReplayPosition",s)
 
+    def test_saved_training_flows_and_bounds(self):
+        self.assertEqual(multibrowser.SaveTrainingFlow(slot=1,name="Criar Reel").slot,1)
+        with self.assertRaises(ValidationError):
+            multibrowser.SaveTrainingFlow(slot=17,name="Criar Reel")
+        with self.assertRaises(ValidationError):
+            multibrowser.LoadTrainingFlow(slot=0)
+        source=(Path(__file__).parent.parent/"app/multibrowser.py").read_text(encoding="utf-8")
+        self.assertIn("social_mb_saved_flows",source)
+        self.assertIn('"/api/training/flows"',source)
+        self.assertIn("executemany",source)
+
+    def test_template_inline_javascript_syntax(self):
+        import shutil, subprocess
+        if not shutil.which("node"):
+            self.skipTest("Node.js não disponível para checagem do JavaScript")
+        s=(Path(__file__).parent.parent/"app/templates/multibrowser.html").read_text(encoding="utf-8")
+        script=s.split("<script>",1)[1].split("</script>",1)[0]
+        script=script.replace("{{csrf|tojson}}",'"unit-test-csrf"')
+        result=subprocess.run(["node","--check"],input=script,text=True,capture_output=True,timeout=12)
+        self.assertEqual(result.returncode,0,result.stderr)
+
     def test_training_template_renders_without_accounts(self):
         from jinja2 import Environment, FileSystemLoader
         templates=Path(__file__).parent.parent/"app/templates"
