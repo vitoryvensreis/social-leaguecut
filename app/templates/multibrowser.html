@@ -269,7 +269,7 @@ async function replayNextStep(){
  const step=trainSteps[trainReplayPosition];
  if(!confirm('Etapa '+(trainReplayPosition+1)+' de '+trainSteps.length+': clicar em ('+step.x+', '+step.y+')?\n\nCONFIRA que o destino não é Compartilhar, Concluir, Login ou outro botão sensível.'))return;
  try{
-   await api('/multibrowser/api/browser/'+slotActive+'/click','POST',{x:step.x,y:step.y});
+   const result=await api('/multibrowser/api/browser/'+slotActive+'/replay-step','POST',{step_id:step.id});
    trainReplayPosition++;
    el('replayPosition').textContent='Próxima etapa: '+(trainReplayPosition+1)+' / '+trainSteps.length;
    el('trainStatus').textContent='Clique '+trainReplayPosition+' executado sob sua confirmação. Confira a imagem antes do próximo.';
