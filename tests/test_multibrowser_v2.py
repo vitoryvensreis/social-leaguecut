@@ -33,6 +33,34 @@ class ValidationTests(unittest.TestCase):
                 self.assertNotEqual(a,b)
                 self.assertTrue(str(a).startswith(root))
                 with self.assertRaises(RuntimeError):worker._directory(1,"../../root")
+    def test_training_tabs_and_horizontal_portrait_cards(self):
+        s=(Path(__file__).parent.parent/"app/templates/multibrowser.html").read_text(encoding="utf-8")
+        self.assertIn('id="tab-automacao"',s)
+        self.assertIn('id="tab-treino"',s)
+        self.assertIn('id="tab-contas"',s)
+        self.assertIn('id="tab-legendas"',s)
+        self.assertIn('id="tilesRail"',s)
+        self.assertIn('aspect-ratio:9/16',s)
+        self.assertIn('flex-wrap:nowrap!important',s)
+        self.assertIn('id="trainScreen"',s)
+        self.assertIn('id="trainRecord"',s)
+        self.assertIn("if(!confirm('Etapa",s)
+        self.assertIn("login-password",s)
+        self.assertIn("trainReplayPosition",s)
+
+    def test_training_template_renders_without_accounts(self):
+        from jinja2 import Environment, FileSystemLoader
+        templates=Path(__file__).parent.parent/"app/templates"
+        env=Environment(loader=FileSystemLoader(str(templates)),autoescape=True)
+        html=env.get_template("multibrowser.html").render(
+            csrf="test",slots=range(1,17),byslot={},captions=[],error="",
+            drive_configured=False
+        )
+        self.assertIn('id="tileShot16"',html)
+        self.assertIn('id="tileShot1"',html)
+        self.assertIn("Laboratório de treino",html)
+        self.assertEqual(html.count('class="tile"'),16)
+
     def test_no_secrets_in_template(self):
         s=(Path(__file__).parent.parent/"app/templates/multibrowser.html").read_text()
         self.assertNotIn("instagrapi",s.lower())
