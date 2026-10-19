@@ -87,6 +87,7 @@ class ValidationTests(unittest.TestCase):
         s=(Path(__file__).parent.parent/"app/templates/multibrowser.html").read_text(encoding="utf-8")
         script=s.split("<script>",1)[1].split("</script>",1)[0]
         script=script.replace("{{csrf|tojson}}",'"unit-test-csrf"')
+        script=script.replace("{{viewport|tojson}}",'{"width":1280,"height":800}')
         result=subprocess.run(["node","--check"],input=script,text=True,capture_output=True,timeout=12)
         self.assertEqual(result.returncode,0,result.stderr)
 
