@@ -81,11 +81,13 @@
 <div class="shade" id="remoteModal"><div class="modal remote"><div class="modalTop"><div><h2 id="remoteTitle">Navegador remoto</h2><small class="muted">Perfil fixo 960×720 • Chromium VPS • sessão persistente</small></div><div class="actions"><button onclick="closeRemote()">Fechar Chromium</button><button onclick="hideRemote()">Voltar ao painel</button></div></div><div class="remoteGrid"><img class="screen" id="screen" alt="Navegador remoto" tabindex="0" onclick="screenClick(event)" onwheel="remoteWheel(event)"><div class="sidebar"><div class="panel"><h3>Navegação e login manual</h3><p>Clique na imagem do Instagram, digite no teclado do computador e use a roda do mouse para rolar. O login não grava cliques, senhas ou teclas.</p><div class="actions"><button onclick="remoteNavigate('back')">← Voltar</button><button onclick="remoteNavigate('forward')">Avançar →</button><button onclick="remoteNavigate('reload')">Atualizar ↻</button></div><p>Os controles de preenchimento abaixo são opcionais caso o teclado remoto não responda.</p><div class="field"><input id="remoteText" placeholder="Texto para digitar" autocomplete="off"></div><div class="actions"><button onclick="sendText()">Digitar</button><button onclick="sendKey('Tab')">Tab</button><button onclick="sendKey('Enter')">Enter</button><button onclick="sendKey('Backspace')">⌫</button></div></div><div class="panel"><h3>Login assistido</h3><p>Preenche o campo correto no Instagram, sem depender de cliques na imagem. O usuário vem da conta cadastrada.</p><div class="field"><button type="button" onclick="fillLoginUsername()">Preencher usuário</button><input id="loginPassword" type="password" autocomplete="new-password" placeholder="Senha da conta (não armazenada)"><button type="button" onclick="fillLoginPassword()">Preencher senha</button></div><p>Depois clique em Entrar no Instagram. O painel não grava sua senha nem seus códigos de acesso.</p></div><div class="panel"><h3>Gravação visual</h3><label><input type="checkbox" id="record" style="width:auto"> Gravar próximos cliques</label><p id="recordCount">0 cliques gravados</p><div class="actions"><button onclick="loadRecord()">Ver</button><button onclick="showPreview()">Prévia</button><button class="danger" onclick="clearRecord()">Limpar</button></div><p>A gravação armazena apenas posições de clique. Não grave a etapa Compartilhar por enquanto.</p></div><div class="panel"><h3>Diagnóstico</h3><p id="remoteStatus">Abrindo...</p></div></div></div></div></div>
 <script>
 const csrf={{csrf|tojson}};let data={accounts:[],captions:[]},slotActive=0,timer=null,busy=false,trainSteps=[],trainReplayPosition=0;
+let remoteActionQueue=Promise.resolve(),wheelReset=null,wheelX=0,wheelY=0;
 const el=id=>document.getElementById(id);function modal(id){el(id).classList.add('open')}function closeM(id){el(id).classList.remove('open')}function notify(msg){el('toast').textContent=msg;el('toast').style.display='block';setTimeout(()=>el('toast').style.display='none',6000)}
 async function api(path,method='GET',body){const r=await fetch(path,{method,credentials:'same-origin',headers:{'x-csrf-token':csrf,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});let o=await r.json().catch(()=>({}));if(!r.ok)throw Error(o.detail||o.error||('HTTP '+r.status));return o}
 async function refresh(){try{data=await api('/multibrowser/api/state');for(let i=1;i<=16;i++){const a=data.accounts.find(x=>x.slot===i);el('user'+i).textContent=a?'@'+a.username:'Conta vazia';el('status'+i).textContent=!a?'Vazia':data.browser_active_slot===i?'Aberta':'Salva';el('status'+i).classList.toggle('on',!!a&&data.browser_active_slot===i);el('open'+i).disabled=el('del'+i).disabled=!a}el('summary').textContent=data.accounts.length+' / 16 contas';renderCaptions();renderAccountsList()}catch(e){notify(e.message)}}
 
 function switchTab(name){
+ el('remoteKeyboard').value='';
  document.querySelectorAll('.tabPane').forEach(p=>p.classList.toggle('active',p.id==='tab-'+name));
  document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
  if(name==='treino'&&slotActive)startFrames();
@@ -127,8 +129,70 @@ function startFrames(){clearInterval(timer);const tick=()=>{
  const tile=el('tileShot'+slotActive),hint=el('tileHint'+slotActive);
  if(tile){tile.style.display='block';tile.src=url;if(hint)hint.style.display='none'}
 };tick();timer=setInterval(tick,2500)}
-function hideRemote(){clearInterval(timer);el('loginPassword').value='';closeM('remoteModal')}async function closeRemote(){clearInterval(timer);try{await api('/multibrowser/api/browser/close','POST');notify('Navegador fechado; sessão preservada.')}catch(e){notify(e.message)}slotActive=0;closeM('remoteModal');refresh()}
-async function screenClick(e){if(!slotActive||busy)return;const img=e.currentTarget,r=img.getBoundingClientRect(),iw=img.naturalWidth||960,ih=img.naturalHeight||720,scale=Math.min(r.width/iw,r.height/ih),ox=(r.width-iw*scale)/2,oy=(r.height-ih*scale)/2,px=e.clientX-r.left-ox,py=e.clientY-r.top-oy;if(px<0||py<0||px>=iw*scale||py>=ih*scale)return;const x=Math.round(px/scale),y=Math.round(py/scale);busy=true;try{const recording=(e.currentTarget.id==='trainScreen'?el('trainRecord').checked:el('record').checked);const part=recording?'record-click':'click';await api('/multibrowser/api/browser/'+slotActive+'/'+part,'POST',{x,y});if(recording)loadRecord()}catch(e){notify(e.message)}finally{busy=false}}
+function hideRemote(){clearInterval(timer);el('loginPassword').value='';el('remoteKeyboard').value='';closeM('remoteModal')}async function closeRemote(){clearInterval(timer);try{await api('/multibrowser/api/browser/close','POST');notify('Navegador fechado; sessão preservada.')}catch(e){notify(e.message)}slotActive=0;closeM('remoteModal');refresh()}
+function remoteCommand(part,body){
+ const target=slotActive;
+ if(!target)return Promise.resolve(null);
+ const execute=async()=>{try{return await api('/multibrowser/api/browser/'+target+'/'+part,'POST',body)}catch(e){notify(e.message);return null}};
+ remoteActionQueue=remoteActionQueue.then(execute,execute);
+ return remoteActionQueue;
+}
+function focusRemoteKeyboard(){
+ const target=el('remoteKeyboard');
+ if(target){target.value='';target.focus({preventScroll:true})}
+}
+async function screenClick(e){
+ if(!slotActive||busy)return;
+ const img=e.currentTarget,r=img.getBoundingClientRect(),iw=img.naturalWidth||960,ih=img.naturalHeight||720;
+ const scale=Math.min(r.width/iw,r.height/ih),ox=(r.width-iw*scale)/2,oy=(r.height-ih*scale)/2;
+ const px=e.clientX-r.left-ox,py=e.clientY-r.top-oy;
+ if(px<0||py<0||px>=iw*scale||py>=ih*scale)return;
+ const x=Math.round(px/scale),y=Math.round(py/scale);
+ const recording=(img.id==='trainScreen'&&el('trainRecord').checked);
+ // The regular account/login screen NEVER records mouse coordinates.
+ focusRemoteKeyboard();
+ busy=true;
+ const result=await remoteCommand(recording?'record-click':'click',{x,y});
+ busy=false;
+ if(recording&&result)loadRecord();
+}
+function remoteKeyboardInput(e){
+ if(!slotActive)return;
+ const t=e.currentTarget,text=t.value;t.value='';
+ if(text)remoteCommand('type',{text:text.slice(0,2200)});
+}
+function remoteKeyboardKey(e){
+ if(!slotActive)return;
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'){
+   e.preventDefault();remoteCommand('key',{key:'ControlOrMeta+A'});return;
+ }
+ // Ctrl+V is processed as a native textarea paste and forwarded via oninput.
+ if(e.ctrlKey||e.metaKey||e.altKey)return;
+ const allowed=new Set(['Enter','Tab','Escape','Backspace','Delete','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End']);
+ if(allowed.has(e.key)){
+   e.preventDefault();
+   remoteCommand('key',{key:e.key});
+ }
+}
+function remoteWheel(e){
+ if(!slotActive)return;
+ e.preventDefault();
+ // Queue normalized touchpad/mouse deltas; no recording.
+ wheelX+=e.deltaX*(e.deltaMode===1?30:1);
+ wheelY+=e.deltaY*(e.deltaMode===1?30:1);
+ if(wheelReset)return;
+ wheelReset=setTimeout(()=>{
+   const dx=Math.max(-3000,Math.min(3000,Math.round(wheelX)));
+   const dy=Math.max(-3000,Math.min(3000,Math.round(wheelY)));
+   wheelX=0;wheelY=0;wheelReset=null;
+   if(dx||dy)remoteCommand('wheel',{dx,dy});
+ },80);
+}
+async function remoteNavigate(action){
+ if(!slotActive){notify('Abra uma conta primeiro.');return}
+ await remoteCommand('navigate',{action});
+}
+
 async function fillLoginUsername(){if(!slotActive)return;try{await api('/multibrowser/api/browser/'+slotActive+'/login-username','POST');notify('Usuário corrigido no campo do Instagram.')}catch(e){notify(e.message)}}
 async function fillLoginPassword(){if(!slotActive)return;const input=el('loginPassword'),value=input.value;input.value='';if(!value)return;try{await api('/multibrowser/api/browser/'+slotActive+'/login-password','POST',{password:value});notify('Senha preenchida no campo correto do Instagram.')}catch(e){notify(e.message)}}
 async function sendText(){if(!el('remoteText').value)return;try{await api('/multibrowser/api/browser/'+slotActive+'/type','POST',{text:el('remoteText').value});el('remoteText').value=''}catch(e){notify(e.message)}}
@@ -174,7 +238,7 @@ async function deleteTrainingFlow(){
  try{await api('/multibrowser/api/training/flows/'+id,'DELETE');await loadFlows();notify('Fluxo excluído.')}
  catch(e){notify(e.message)}
 }
-function setTrainingRecord(){el('trainStatus').textContent=el('trainRecord').checked?'GRAVANDO: clique na imagem do navegador para registrar os passos.':'Gravação pausada; os passos anteriores foram preservados.'}
+function setTrainingRecord(){el('remoteKeyboard').value='';el('trainStatus').textContent=el('trainRecord').checked?'GRAVANDO: somente os próximos cliques de treino serão salvos. Não grave o login.':'Gravação desligada: clique, digite e navegue normalmente.'}
 async function openTrainBrowser(){
  const slot=Number(el('trainSlot').value);
  if(!Number.isInteger(slot)||slot<1||slot>16){notify('Selecione uma conta cadastrada.',true);return}
