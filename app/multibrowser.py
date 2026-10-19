@@ -36,7 +36,14 @@ class LoadTrainingFlow(BaseModel):
     slot:int=Field(ge=1,le=16)
 
 class KeyPayload(BaseModel):
-    key:str=Field(pattern=r"^(Enter|Tab|Escape|Backspace|ArrowLeft|ArrowRight|ArrowUp|ArrowDown)$")
+    key:str=Field(pattern=r"^(Enter|Tab|Escape|Backspace|ArrowLeft|ArrowRight|ArrowUp|ArrowDown|Home|End|Delete)$")
+
+class WheelPayload(BaseModel):
+    dx:float=Field(ge=-3000,le=3000)
+    dy:float=Field(ge=-3000,le=3000)
+
+class NavigatePayload(BaseModel):
+    action:str=Field(pattern=r"^(back|forward|reload)$")
 
 class LoginPasswordPayload(BaseModel):
     password:str=Field(min_length=1,max_length=256)
@@ -258,6 +265,24 @@ async def key(slot:int,payload:KeyPayload,request:Request):
     write(request)
     try:await browser_manager.press(slot,payload.key)
     except RuntimeError as exc:raise HTTPException(409,str(exc)) from exc
+    return {"ok":True}
+
+@router.post("/api/browser/{slot}/wheel")
+async def scroll_remote_browser(slot:int,payload:WheelPayload,request:Request):
+    write(request)
+    try:
+        await browser_manager.wheel(slot,payload.dx,payload.dy)
+    except RuntimeError as exc:
+        raise HTTPException(409,str(exc)) from None
+    return {"ok":True}
+
+@router.post("/api/browser/{slot}/navigate")
+async def navigate_remote_browser(slot:int,payload:NavigatePayload,request:Request):
+    write(request)
+    try:
+        await browser_manager.navigate(slot,payload.action)
+    except RuntimeError as exc:
+        raise HTTPException(409,str(exc)) from None
     return {"ok":True}
 
 @router.post("/api/browser/{slot}/record-click")
