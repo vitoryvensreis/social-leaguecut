@@ -31,6 +31,9 @@ class TypePayload(BaseModel):
 class KeyPayload(BaseModel):
     key:str=Field(pattern=r"^(Enter|Tab|Escape|Backspace|ArrowLeft|ArrowRight|ArrowUp|ArrowDown)$")
 
+class LoginPasswordPayload(BaseModel):
+    password:str=Field(min_length=1,max_length=256)
+
 def db_conn():
     from .main import db_connection
     return db_connection()
@@ -205,6 +208,27 @@ async def click(slot:int,payload:ClickPayload,request:Request):
     write(request)
     try:await browser_manager.click(slot,payload.x,payload.y)
     except RuntimeError as exc:raise HTTPException(409,str(exc)) from exc
+    return {"ok":True}
+
+@router.post("/api/browser/{slot}/login-username")
+async def login_username(slot:int,request:Request):
+    write(request)
+    with db_conn() as db:
+        username=account(db,slot)
+    try:
+        await browser_manager.fill_login_field(slot,"username",username)
+    except RuntimeError as exc:
+        raise HTTPException(409,str(exc)) from None
+    return {"ok":True}
+
+@router.post("/api/browser/{slot}/login-password")
+async def login_password(slot:int,payload:LoginPasswordPayload,request:Request):
+    write(request)
+    try:
+        await browser_manager.fill_login_field(slot,"password",payload.password)
+    except RuntimeError as exc:
+        raise HTTPException(409,str(exc)) from None
+    # Never retain or log credentials; the field is sent only to the active browser.
     return {"ok":True}
 
 @router.post("/api/browser/{slot}/type")
