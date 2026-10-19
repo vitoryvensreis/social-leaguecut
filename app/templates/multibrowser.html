@@ -154,7 +154,7 @@ async function screenClick(e){
  busy=true;
  const result=await remoteCommand(recording?'record-click':'click',{x,y});
  busy=false;
- if(recording&&result)loadRecord();
+ if(recording&&result){if(result.recorded===false){el('trainRecord').checked=false;el('trainStatus').textContent='Login ou verificação: cliques NÃO gravados. Continue usando mouse e teclado normalmente.';}else loadRecord();}
 }
 function remoteKeyboardInput(e){
  if(!slotActive)return;
@@ -243,7 +243,7 @@ async function openTrainBrowser(){
  const slot=Number(el('trainSlot').value);
  if(!Number.isInteger(slot)||slot<1||slot>16){notify('Selecione uma conta cadastrada.',true);return}
  el('trainRecord').checked=false;slotActive=slot;trainReplayPosition=0;el('trainStatus').textContent='Abrindo sessão persistente da conta '+slot+'...';
- try{await api('/multibrowser/api/browser/'+slot+'/open','POST');el('trainStatus').textContent='Chromium aberto. Clique na imagem para interagir ou marque Gravar próximos cliques.';startFrames();await refresh();await loadRecord();await loadFlows()}
+ try{await api('/multibrowser/api/browser/'+slot+'/open','POST');el('trainStatus').textContent='Chromium aberto. Clique nos campos da imagem e digite normalmente pelo teclado. A gravação permanece desligada.';startFrames();await refresh();await loadRecord();await loadFlows()}
  catch(e){el('trainStatus').textContent=e.message;notify(e.message)}
 }
 async function closeTrainBrowser(){
