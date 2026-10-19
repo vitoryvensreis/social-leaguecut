@@ -20,6 +20,7 @@ from app.motor_api import router as motor_router
 from app.motor_campaign import router as motor_campaign_router
 from app.local_library import router as local_library_router
 from app.monitor import router as reports_router, report as monitor_report
+from app.multibrowser import router as multibrowser_router
 
 ROOT=Path(__file__).resolve().parent.parent
 load_dotenv(ROOT/".env")
@@ -30,6 +31,7 @@ app.include_router(motor_router)
 app.include_router(motor_campaign_router)
 app.include_router(local_library_router)
 app.include_router(reports_router)
+app.include_router(multibrowser_router)
 app.add_middleware(SessionMiddleware,
     secret_key=os.getenv("SESSION_SECRET") or "SET_SESSION_SECRET_IN_ENV_BEFORE_LOGIN",
     https_only=True,same_site="lax")
@@ -79,6 +81,8 @@ def health():
 
 @app.get("/")
 def home(request:Request):
+    if admin(request):
+        return RedirectResponse('/multibrowser',status_code=303)
     configured=all(os.getenv(key) for key in
         ("ADMIN_PASSWORD","SESSION_SECRET","DB_USER","DB_PASSWORD","DB_NAME"))
     if "csrf" not in request.session:
