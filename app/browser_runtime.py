@@ -92,6 +92,18 @@ class BrowserManager:
             except Exception:
                 raise RuntimeError("Falha ao enviar tecla. Verifique se o navegador continua aberto.") from None
 
+    async def is_login_screen(self,slot):
+        """Never record clicks on a screen with a password field or login URL."""
+        async with self.lock:
+            page=self._page_for(slot)
+            url=str(page.url or "").lower()
+            if any(t in url for t in ("/accounts/login","/challenge/","/two_factor/","/accounts/signup")):
+                return True
+            try:
+                return await page.locator('input[type="password"]').count()>0
+            except Exception:
+                return False
+
     async def wheel(self,slot,dx,dy):
         """Scroll the active Chromium page like a physical mouse wheel."""
         async with self.lock:
