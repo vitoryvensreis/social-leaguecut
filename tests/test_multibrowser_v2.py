@@ -65,7 +65,53 @@ class BrowserTests(unittest.IsolatedAsyncioTestCase):
         b.page=MagicMock()
         b.page.mouse.click=AsyncMock()
         await b.click(1,20,40)
-        b.page.mouse.click.assert_awaited_once_with(20,40,timeout=10000)
+        b.page.mouse.click.assert_awaited_once_with(20,40)
+    async def test_click_exception_is_not_server_500(self):
+        b=BrowserManager()
+        b.active_slot=1
+        b.page=MagicMock()
+        b.page.mouse.click=AsyncMock(side_effect=TypeError("unexpected argument"))
+        with self.assertRaises(RuntimeError) as e:await b.click(1,20,40)
+        self.assertIn("Falha ao clicar",str(e.exception))
+
+    async def test_assisted_username_fills_correct_field(self):
+        b=BrowserManager()
+        b.active_slot=1
+        b.page=MagicMock()
+        b.page.url="https://www.instagram.com/accounts/login/"
+        loc=MagicMock()
+        loc.first.fill=AsyncMock()
+        b.page.locator.return_value=loc
+        await b.fill_login_field(1,"username","augusto14082")
+        b.page.locator.assert_called_once_with('input[name="username"]')
+        loc.first.fill.assert_awaited_once_with("augusto14082",timeout=7500)
+
+    async def test_assisted_password_uses_password_input(self):
+        b=BrowserManager()
+        b.active_slot=1
+        b.page=MagicMock()
+        b.page.url="https://www.instagram.com/accounts/login/"
+        loc=MagicMock()
+        loc.first.fill=AsyncMock()
+        b.page.locator.return_value=loc
+        await b.fill_login_field(1,"password","dummy-only")
+        b.page.locator.assert_called_once_with('input[name="password"], input[type="password"]')
+
+    async def test_login_fields_not_sent_to_other_domains(self):
+        b=BrowserManager()
+        b.active_slot=1
+        b.page=MagicMock()
+        b.page.url="https://example.org/"
+        with self.assertRaises(RuntimeError):
+            await b.fill_login_field(1,"password","dummy-only")
+        b.page.locator.assert_not_called()
+
+    async def test_password_not_on_interface_after_use(self):
+        html=(Path(__file__).parent.parent/"app/templates/multibrowser.html").read_text()
+        self.assertIn('type="password"',html)
+        self.assertIn("input.value=''",html)
+        self.assertIn("img.naturalWidth||960",html)
+
     async def test_text_not_saved(self):
         b=BrowserManager()
         b.active_slot=1
