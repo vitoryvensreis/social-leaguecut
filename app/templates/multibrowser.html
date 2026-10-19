@@ -68,10 +68,34 @@
 <div class="shade" id="captionModal"><div class="modal"><div class="modalTop"><h2>Legenda</h2><button onclick="closeM('captionModal')">✕</button></div><form onsubmit="saveCaption(event)"><input id="captionId" type="hidden"><div class="field"><label>Nome do modelo</label><input id="captionTitle" maxlength="100" required></div><div class="field"><label>Legenda (até 2200 caracteres)</label><textarea id="captionBody" maxlength="2200" required rows="8"></textarea></div><div class="actions"><button class="primary">Salvar</button><button type="button" onclick="closeM('captionModal')">Cancelar</button></div></form></div></div>
 <div class="shade" id="remoteModal"><div class="modal remote"><div class="modalTop"><div><h2 id="remoteTitle">Navegador remoto</h2><small class="muted">Perfil fixo 960×720 • Chromium VPS • sessão persistente</small></div><div class="actions"><button onclick="closeRemote()">Fechar Chromium</button><button onclick="hideRemote()">Voltar ao painel</button></div></div><div class="remoteGrid"><img class="screen" id="screen" alt="Navegador remoto" onclick="screenClick(event)"><div class="sidebar"><div class="panel"><h3>Controle do navegador</h3><p>Clique na imagem para interagir. Digite texto somente no campo atualmente selecionado. Nada digitado é gravado pelo LeagueCut.</p><div class="field"><input id="remoteText" placeholder="Texto para digitar" autocomplete="off"></div><div class="actions"><button onclick="sendText()">Digitar</button><button onclick="sendKey('Tab')">Tab</button><button onclick="sendKey('Enter')">Enter</button><button onclick="sendKey('Backspace')">⌫</button></div></div><div class="panel"><h3>Login assistido</h3><p>Preenche o campo correto no Instagram, sem depender de cliques na imagem. O usuário vem da conta cadastrada.</p><div class="field"><button type="button" onclick="fillLoginUsername()">Preencher usuário</button><input id="loginPassword" type="password" autocomplete="new-password" placeholder="Senha da conta (não armazenada)"><button type="button" onclick="fillLoginPassword()">Preencher senha</button></div><p>Depois clique em Entrar no Instagram. O painel não grava sua senha nem seus códigos de acesso.</p></div><div class="panel"><h3>Gravação visual</h3><label><input type="checkbox" id="record" style="width:auto"> Gravar próximos cliques</label><p id="recordCount">0 cliques gravados</p><div class="actions"><button onclick="loadRecord()">Ver</button><button onclick="showPreview()">Prévia</button><button class="danger" onclick="clearRecord()">Limpar</button></div><p>A gravação armazena apenas posições de clique. Não grave a etapa Compartilhar por enquanto.</p></div><div class="panel"><h3>Diagnóstico</h3><p id="remoteStatus">Abrindo...</p></div></div></div></div></div>
 <script>
-const csrf={{csrf|tojson}};let data={accounts:[],captions:[]},slotActive=0,timer=null,busy=false;
+const csrf={{csrf|tojson}};let data={accounts:[],captions:[]},slotActive=0,timer=null,busy=false,trainSteps=[],trainReplayPosition=0;
 const el=id=>document.getElementById(id);function modal(id){el(id).classList.add('open')}function closeM(id){el(id).classList.remove('open')}function notify(msg){el('toast').textContent=msg;el('toast').style.display='block';setTimeout(()=>el('toast').style.display='none',6000)}
 async function api(path,method='GET',body){const r=await fetch(path,{method,credentials:'same-origin',headers:{'x-csrf-token':csrf,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});let o=await r.json().catch(()=>({}));if(!r.ok)throw Error(o.detail||o.error||('HTTP '+r.status));return o}
-async function refresh(){try{data=await api('/multibrowser/api/state');for(let i=1;i<=16;i++){const a=data.accounts.find(x=>x.slot===i);el('user'+i).textContent=a?'@'+a.username:'Conta vazia';el('status'+i).textContent=!a?'Vazia':data.browser_active_slot===i?'Aberta':'Salva';el('status'+i).classList.toggle('on',!!a&&data.browser_active_slot===i);el('open'+i).disabled=el('del'+i).disabled=!a}el('summary').textContent=data.accounts.length+' / 16 contas';renderCaptions()}catch(e){notify(e.message)}}
+async function refresh(){try{data=await api('/multibrowser/api/state');for(let i=1;i<=16;i++){const a=data.accounts.find(x=>x.slot===i);el('user'+i).textContent=a?'@'+a.username:'Conta vazia';el('status'+i).textContent=!a?'Vazia':data.browser_active_slot===i?'Aberta':'Salva';el('status'+i).classList.toggle('on',!!a&&data.browser_active_slot===i);el('open'+i).disabled=el('del'+i).disabled=!a}el('summary').textContent=data.accounts.length+' / 16 contas';renderCaptions();renderAccountsList()}catch(e){notify(e.message)}}
+
+function switchTab(name){
+ document.querySelectorAll('.tabPane').forEach(p=>p.classList.toggle('active',p.id==='tab-'+name));
+ document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
+ if(name==='treino'&&slotActive)startFrames();
+}
+function slideRail(direction){el('tilesRail').scrollBy({left:direction*840,behavior:'smooth'})}
+function renderAccountsList(){
+ const root=el('accountsList');root.replaceChildren();
+ for(let i=1;i<=16;i++){
+   const a=data.accounts.find(x=>Number(x.slot)===i);
+   const d=document.createElement('div');d.className='item';
+   const t=document.createElement('span');t.textContent=String(i).padStart(2,'0')+' · '+(a?'@'+a.username:'Conta vazia');
+   const controls=document.createElement('div');controls.className='actions';
+   const edit=document.createElement('button');edit.textContent=a?'Editar':'Adicionar';edit.onclick=()=>openAccount(i);controls.append(edit);
+   if(a){const train=document.createElement('button');train.textContent='Treinar';train.onclick=()=>{switchTab('treino');el('trainSlot').value=String(i);openTrainBrowser()};controls.append(train);
+     const remove=document.createElement('button');remove.textContent='Excluir';remove.className='danger';remove.onclick=()=>deleteAccount(i);controls.append(remove)}
+   d.append(t,controls);root.append(d);
+ }
+ const select=el('trainSlot'),previous=select.value;select.replaceChildren();
+ const first=document.createElement('option');first.value='';first.textContent='Selecione a conta';select.append(first);
+ for(const a of data.accounts){const opt=document.createElement('option');opt.value=String(a.slot);opt.textContent=String(a.slot).padStart(2,'0')+' · @'+a.username;select.append(opt)}
+ if([...select.options].some(o=>o.value===previous))select.value=previous;
+}
 function openAccount(i){const a=data.accounts.find(x=>x.slot===i);el('slot').value=i||Math.min(16,data.accounts.length+1);el('username').value=a?.username||'';el('label').value=a?.label||'';modal('accountModal')}
 async function saveAccount(e){e.preventDefault();try{await api('/multibrowser/api/accounts/'+el('slot').value,'POST',{username:el('username').value,label:el('label').value});closeM('accountModal');refresh();notify('Conta salva! Abra a tela para fazer login manual.')}catch(e){notify(e.message)}}
 async function deleteAccount(i){if(!confirm('Excluir conta da posição '+i+'? A sessão persistente será preservada.'))return;try{await api('/multibrowser/api/accounts/'+i,'DELETE');refresh()}catch(e){notify(e.message)}}
@@ -83,15 +107,70 @@ function renderCaptions(){const c=el('captions');c.replaceChildren();if(!data.ca
 async function loadDrive(){const c=el('driveList');c.textContent='Consultando...';try{const res=await api('/drive/files');c.replaceChildren();if(!res.connected){c.textContent='Drive desconectado. Autorize no botão acima.';return}for(const f of res.files||[]){const row=document.createElement('div');row.className='item';const s=document.createElement('span');s.textContent=f.name;const b=document.createElement('button');b.textContent='Importar';b.onclick=()=>importDrive(f.id);row.append(s,b);c.append(row)}if(!(res.files||[]).length)c.textContent='Nenhum vídeo encontrado.'}catch(e){c.textContent=e.message}}
 function importDrive(id){if(!confirm('Importar MP4 para a VPS?'))return;const f=document.createElement('form');f.method='post';f.action='/drive/import';for(const [name,value]of Object.entries({csrf,file_id:id})){const i=document.createElement('input');i.type='hidden';i.name=name;i.value=value;f.append(i)}document.body.append(f);f.submit()}
 async function openRemote(i){slotActive=i;el('record').checked=false;el('remoteTitle').textContent='Conta '+i+' • Navegador remoto';el('remoteStatus').textContent='Abrindo Chromium...';modal('remoteModal');try{await api('/multibrowser/api/browser/'+i+'/open','POST');el('remoteStatus').textContent='Chromium aberto. Faça login manual se necessário.';refresh();startFrames()}catch(e){el('remoteStatus').textContent=e.message;notify(e.message)}}
-function startFrames(){clearInterval(timer);const tick=()=>{if(slotActive&&!busy)el('screen').src='/multibrowser/api/browser/'+slotActive+'/screenshot?t='+Date.now()};tick();timer=setInterval(tick,2500)}
+function startFrames(){clearInterval(timer);const tick=()=>{
+ if(!slotActive||busy)return;
+ const url='/multibrowser/api/browser/'+slotActive+'/screenshot?t='+Date.now();
+ const train=el('trainScreen');if(train&&el('tab-treino').classList.contains('active'))train.src=url;
+ if(el('remoteModal').classList.contains('open'))el('screen').src=url;
+ const tile=el('tileShot'+slotActive),hint=el('tileHint'+slotActive);
+ if(tile){tile.style.display='block';tile.src=url;if(hint)hint.style.display='none'}
+};tick();timer=setInterval(tick,2500)}
 function hideRemote(){clearInterval(timer);el('loginPassword').value='';closeM('remoteModal')}async function closeRemote(){clearInterval(timer);try{await api('/multibrowser/api/browser/close','POST');notify('Navegador fechado; sessão preservada.')}catch(e){notify(e.message)}slotActive=0;closeM('remoteModal');refresh()}
-async function screenClick(e){if(!slotActive||busy)return;const img=e.currentTarget,r=img.getBoundingClientRect(),iw=img.naturalWidth||960,ih=img.naturalHeight||720,scale=Math.min(r.width/iw,r.height/ih),ox=(r.width-iw*scale)/2,oy=(r.height-ih*scale)/2,px=e.clientX-r.left-ox,py=e.clientY-r.top-oy;if(px<0||py<0||px>=iw*scale||py>=ih*scale)return;const x=Math.round(px/scale),y=Math.round(py/scale);busy=true;try{const part=el('record').checked?'record-click':'click';await api('/multibrowser/api/browser/'+slotActive+'/'+part,'POST',{x,y});if(el('record').checked)loadRecord()}catch(e){notify(e.message)}finally{busy=false}}
+async function screenClick(e){if(!slotActive||busy)return;const img=e.currentTarget,r=img.getBoundingClientRect(),iw=img.naturalWidth||960,ih=img.naturalHeight||720,scale=Math.min(r.width/iw,r.height/ih),ox=(r.width-iw*scale)/2,oy=(r.height-ih*scale)/2,px=e.clientX-r.left-ox,py=e.clientY-r.top-oy;if(px<0||py<0||px>=iw*scale||py>=ih*scale)return;const x=Math.round(px/scale),y=Math.round(py/scale);busy=true;try{const recording=(e.currentTarget.id==='trainScreen'?el('trainRecord').checked:el('record').checked);const part=recording?'record-click':'click';await api('/multibrowser/api/browser/'+slotActive+'/'+part,'POST',{x,y});if(recording)loadRecord()}catch(e){notify(e.message)}finally{busy=false}}
 async function fillLoginUsername(){if(!slotActive)return;try{await api('/multibrowser/api/browser/'+slotActive+'/login-username','POST');notify('Usuário corrigido no campo do Instagram.')}catch(e){notify(e.message)}}
 async function fillLoginPassword(){if(!slotActive)return;const input=el('loginPassword'),value=input.value;input.value='';if(!value)return;try{await api('/multibrowser/api/browser/'+slotActive+'/login-password','POST',{password:value});notify('Senha preenchida no campo correto do Instagram.')}catch(e){notify(e.message)}}
 async function sendText(){if(!el('remoteText').value)return;try{await api('/multibrowser/api/browser/'+slotActive+'/type','POST',{text:el('remoteText').value});el('remoteText').value=''}catch(e){notify(e.message)}}
 async function sendKey(key){try{await api('/multibrowser/api/browser/'+slotActive+'/key','POST',{key})}catch(e){notify(e.message)}}
-async function loadRecord(){try{const d=await api('/multibrowser/api/browser/'+slotActive+'/recording');el('recordCount').textContent=d.steps.length+' cliques gravados; reprodução desativada.'}catch(e){notify(e.message)}}
-async function clearRecord(){if(!confirm('Apagar gravação?'))return;try{await api('/multibrowser/api/browser/'+slotActive+'/recording','DELETE');loadRecord()}catch(e){notify(e.message)}}
+async function loadRecord(){
+ if(!slotActive)return;
+ try{const d=await api('/multibrowser/api/browser/'+slotActive+'/recording');trainSteps=d.steps||[];
+   el('recordCount').textContent=trainSteps.length+' cliques registrados';
+   el('trainCount').textContent=trainSteps.length+' cliques no mapa';
+   const list=el('trainSteps');list.replaceChildren();
+   trainSteps.forEach((s,i)=>{const item=document.createElement('div');item.className='stepItem';item.textContent=(i+1)+'. Clique em ('+s.x+', '+s.y+')';list.append(item)});
+   if(trainReplayPosition>=trainSteps.length)trainReplayPosition=0;
+   el('replayPosition').textContent='Próxima etapa: '+(trainReplayPosition+1)+' / '+(trainSteps.length||0);
+ }catch(e){notify(e.message)}
+}
+async function clearRecord(){if(!slotActive||!confirm('Apagar os cliques de treino desta conta?'))return;try{await api('/multibrowser/api/browser/'+slotActive+'/recording','DELETE');trainReplayPosition=0;await loadRecord()}catch(e){notify(e.message)}}
 async function showPreview(){try{const d=await api('/multibrowser/api/browser/'+slotActive+'/replay-preview','POST');notify(d.steps.length+' primeiras coordenadas registradas; nenhum clique reproduzido.')}catch(e){notify(e.message)}}
+
+function setTrainingRecord(){el('trainStatus').textContent=el('trainRecord').checked?'GRAVANDO: clique na imagem do navegador para registrar os passos.':'Gravação pausada; os passos anteriores foram preservados.'}
+async function openTrainBrowser(){
+ const slot=Number(el('trainSlot').value);
+ if(!Number.isInteger(slot)||slot<1||slot>16){notify('Selecione uma conta cadastrada.',true);return}
+ el('trainRecord').checked=false;slotActive=slot;trainReplayPosition=0;el('trainStatus').textContent='Abrindo sessão persistente da conta '+slot+'...';
+ try{await api('/multibrowser/api/browser/'+slot+'/open','POST');el('trainStatus').textContent='Chromium aberto. Clique na imagem para interagir ou marque Gravar próximos cliques.';startFrames();await refresh();await loadRecord()}
+ catch(e){el('trainStatus').textContent=e.message;notify(e.message)}
+}
+async function closeTrainBrowser(){
+ if(!slotActive)return;el('trainRecord').checked=false;clearInterval(timer);
+ try{await api('/multibrowser/api/browser/close','POST');el('trainStatus').textContent='Navegador fechado; sessão preservada.';slotActive=0;refresh()}
+ catch(e){notify(e.message)}
+}
+async function sendTrainText(){
+ const field=el('trainText'),value=field.value;field.value='';if(!value||!slotActive)return;
+ try{await api('/multibrowser/api/browser/'+slotActive+'/type','POST',{text:value});notify('Texto inserido no campo selecionado.')}
+ catch(e){notify(e.message)}
+}
+async function trainFillPassword(){
+ const field=el('trainPassword'),value=field.value;field.value='';if(!value||!slotActive)return;
+ try{await api('/multibrowser/api/browser/'+slotActive+'/login-password','POST',{password:value});notify('Senha enviada ao campo correto do Instagram.')}
+ catch(e){notify(e.message)}
+}
+function resetTrainReplay(){trainReplayPosition=0;el('replayPosition').textContent='Etapa 1 de '+trainSteps.length}
+async function replayNextStep(){
+ if(!slotActive){notify('Abra uma conta no Treino primeiro.',true);return}
+ if(!trainSteps.length){notify('Grave alguns cliques antes de testar.',true);return}
+ if(trainReplayPosition>=trainSteps.length){notify('Sequência concluída. Clique Recomeçar lista.');return}
+ const step=trainSteps[trainReplayPosition];
+ if(!confirm('Etapa '+(trainReplayPosition+1)+' de '+trainSteps.length+': clicar em ('+step.x+', '+step.y+')?\n\nCONFIRA que o destino não é Compartilhar, Concluir, Login ou outro botão sensível.'))return;
+ try{
+   await api('/multibrowser/api/browser/'+slotActive+'/click','POST',{x:step.x,y:step.y});
+   trainReplayPosition++;
+   el('replayPosition').textContent='Próxima etapa: '+(trainReplayPosition+1)+' / '+trainSteps.length;
+   el('trainStatus').textContent='Clique '+trainReplayPosition+' executado sob sua confirmação. Confira a imagem antes do próximo.';
+ }catch(e){notify(e.message)}
+}
 refresh();
 </script></body></html>
