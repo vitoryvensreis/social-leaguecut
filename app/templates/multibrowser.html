@@ -272,7 +272,7 @@ async function replayNextStep(){
    const result=await api('/multibrowser/api/browser/'+slotActive+'/replay-step','POST',{step_id:step.id});
    trainReplayPosition++;
    el('replayPosition').textContent='Próxima etapa: '+(trainReplayPosition+1)+' / '+trainSteps.length;
-   el('trainStatus').textContent='Clique '+trainReplayPosition+' executado sob sua confirmação. Confira a imagem antes do próximo.';
+   el('trainStatus').textContent='Etapa '+trainReplayPosition+' via '+(result.method==='element'?'HTML':'coordenadas')+'. Confira a imagem antes do próximo.';
  }catch(e){notify(e.message)}
 }
 refresh();
