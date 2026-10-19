@@ -54,6 +54,12 @@
 <div class="trainControls">
 <div class="panel"><h3>Gravação visual</h3><p class="muted">Só as coordenadas dos cliques são salvas. Não grave senhas, autenticação ou Compartilhar.</p><label class="formInline"><input id="trainRecord" type="checkbox" style="width:auto" onchange="setTrainingRecord()"> Gravar próximos cliques</label>
 <div class="actions" style="margin-top:10px"><button onclick="loadRecord()">Ver etapas</button><button onclick="showPreview()">Prévia</button><button onclick="clearRecord()" class="danger">Limpar</button></div><p id="trainCount" class="muted">0 cliques registrados</p><div id="trainSteps" class="stepsBox"></div></div>
+<div class="panel"><h3>Fluxos salvos no MySQL</h3><p class="muted">Salve o mapa de cliques para reutilizar em outra conta depois de conferir os controles.</p>
+<div class="field"><input id="trainFlowName" maxlength="100" placeholder="Nome do fluxo, ex.: Criar Reel 9:16"></div>
+<button type="button" onclick="saveTrainingFlow()" class="primary">Salvar fluxo</button>
+<div class="field" style="margin-top:10px"><select id="savedFlows" style="width:100%;background:#101623;color:#fff;padding:10px;border:1px solid #435069;border-radius:8px"><option value="">Nenhum fluxo salvo</option></select></div>
+<div class="actions"><button onclick="loadTrainingFlow()">Carregar no treino</button><button onclick="loadFlows()">Atualizar lista</button><button class="danger" onclick="deleteTrainingFlow()">Excluir</button></div>
+</div>
 <div class="panel"><h3>Reprodução supervisionada</h3><p class="muted">Clique por clique, com confirmação antes de cada etapa. Não executa Compartilhar automaticamente.</p><div class="actions"><button onclick="replayNextStep()">Testar próximo clique</button><button onclick="resetTrainReplay()">Recomeçar lista</button></div><p id="replayPosition" class="muted">Etapa 1</p></div>
 <div class="panel"><h3>Controle do navegador</h3><div class="field"><input id="trainText" autocomplete="off" placeholder="Texto do campo selecionado"></div><div class="actions"><button onclick="sendTrainText()">Digitar</button><button onclick="sendKey('Tab')">Tab</button><button onclick="sendKey('Enter')">Enter</button><button onclick="sendKey('Backspace')">⌫</button></div>
 <hr style="border:0;border-top:1px solid #344159;margin:12px 0"><button onclick="fillLoginUsername()">Preencher usuário</button><div class="field" style="margin-top:10px"><input id="trainPassword" type="password" autocomplete="new-password" placeholder="Senha (não salva)"></div><button onclick="trainFillPassword()">Preencher senha no Instagram</button></div>
@@ -135,12 +141,39 @@ async function loadRecord(){
 async function clearRecord(){if(!slotActive||!confirm('Apagar os cliques de treino desta conta?'))return;try{await api('/multibrowser/api/browser/'+slotActive+'/recording','DELETE');trainReplayPosition=0;await loadRecord()}catch(e){notify(e.message)}}
 async function showPreview(){try{const d=await api('/multibrowser/api/browser/'+slotActive+'/replay-preview','POST');notify(d.steps.length+' primeiras coordenadas registradas; nenhum clique reproduzido.')}catch(e){notify(e.message)}}
 
+
+async function loadFlows(){
+ try{const response=await api('/multibrowser/api/training/flows');
+   const select=el('savedFlows'),old=select.value;select.replaceChildren();
+   const none=document.createElement('option');none.value='';none.textContent='Selecione um fluxo salvo';select.append(none);
+   for(const f of response.flows||[]){const opt=document.createElement('option');opt.value=f.id;opt.textContent=f.name+' ('+f.steps+' cliques · conta '+f.slot+')';select.append(opt)}
+   if([...select.options].some(o=>o.value===old))select.value=old;
+ }catch(e){notify(e.message)}
+}
+async function saveTrainingFlow(){
+ if(!slotActive){notify('Abra uma conta no Treino.',true);return}
+ const name=el('trainFlowName').value.trim();if(name.length<2){notify('Informe um nome para o fluxo.',true);return}
+ try{const d=await api('/multibrowser/api/training/flows','POST',{slot:slotActive,name});await loadFlows();el('savedFlows').value=String(d.id);notify('Fluxo salvo no MySQL com '+d.steps+' cliques.')}
+ catch(e){notify(e.message)}
+}
+async function loadTrainingFlow(){
+ const id=Number(el('savedFlows').value);
+ if(!id||!slotActive){notify('Selecione o fluxo e abra uma conta no Treino.',true);return}
+ if(!confirm('Substituir o mapa de cliques de treino desta conta pelo fluxo salvo?'))return;
+ try{await api('/multibrowser/api/training/flows/'+id+'/load','POST',{slot:slotActive});trainReplayPosition=0;await loadRecord();notify('Fluxo carregado. Confira cada etapa antes de reproduzir.')}
+ catch(e){notify(e.message)}
+}
+async function deleteTrainingFlow(){
+ const id=Number(el('savedFlows').value);if(!id||!confirm('Excluir permanentemente este fluxo salvo?'))return;
+ try{await api('/multibrowser/api/training/flows/'+id,'DELETE');await loadFlows();notify('Fluxo excluído.')}
+ catch(e){notify(e.message)}
+}
 function setTrainingRecord(){el('trainStatus').textContent=el('trainRecord').checked?'GRAVANDO: clique na imagem do navegador para registrar os passos.':'Gravação pausada; os passos anteriores foram preservados.'}
 async function openTrainBrowser(){
  const slot=Number(el('trainSlot').value);
  if(!Number.isInteger(slot)||slot<1||slot>16){notify('Selecione uma conta cadastrada.',true);return}
  el('trainRecord').checked=false;slotActive=slot;trainReplayPosition=0;el('trainStatus').textContent='Abrindo sessão persistente da conta '+slot+'...';
- try{await api('/multibrowser/api/browser/'+slot+'/open','POST');el('trainStatus').textContent='Chromium aberto. Clique na imagem para interagir ou marque Gravar próximos cliques.';startFrames();await refresh();await loadRecord()}
+ try{await api('/multibrowser/api/browser/'+slot+'/open','POST');el('trainStatus').textContent='Chromium aberto. Clique na imagem para interagir ou marque Gravar próximos cliques.';startFrames();await refresh();await loadRecord();await loadFlows()}
  catch(e){el('trainStatus').textContent=e.message;notify(e.message)}
 }
 async function closeTrainBrowser(){
