@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
-from .browser_runtime import browser_manager
+from .browser_runtime import browser_manager, VIEWPORT
 
 router=APIRouter(prefix="/multibrowser",tags=["multibrowser"])
 templates=Jinja2Templates(directory=str(Path(__file__).parent/"templates"))
@@ -22,8 +22,11 @@ class CaptionPayload(BaseModel):
     body:str=Field(min_length=1,max_length=2200)
 
 class ClickPayload(BaseModel):
-    x:float=Field(ge=0,le=960)
-    y:float=Field(ge=0,le=720)
+    x:float=Field(ge=0,le=VIEWPORT["width"])
+    y:float=Field(ge=0,le=VIEWPORT["height"])
+
+class ReplayPayload(BaseModel):
+    step_id:int=Field(ge=1)
 
 class TypePayload(BaseModel):
     text:str=Field(min_length=1,max_length=2200)
@@ -90,6 +93,18 @@ def init(db):
           x SMALLINT UNSIGNED NULL,y SMALLINT UNSIGNED NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,INDEX(slot,id)
         ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci""")
+        # Upgrade existing installations without dropping their recordings.
+        for col,definition in (
+            ("selector","VARCHAR(1024) NULL"),
+            ("label","VARCHAR(120) NULL")
+        ):
+            c.execute("SHOW COLUMNS FROM social_mb_recordings LIKE %s",(col,))
+            if not c.fetchone():
+                try:
+                    c.execute(f"ALTER TABLE social_mb_recordings ADD COLUMN {col} {definition}")
+                except Exception as exc:
+                    if getattr(exc,"args",(None,))[0]!=1060:
+                        raise
     db.commit()
 
 def state(db):
@@ -123,6 +138,7 @@ def home(request:Request):
     return templates.TemplateResponse(request,"multibrowser.html",{
         "request":request,"csrf":request.session["csrf"],"slots":range(1,17),
         "byslot":byslot,"captions":captions,"error":err,
+        "viewport":VIEWPORT,
         "drive_configured":all(os.getenv(k) for k in ("GOOGLE_CLIENT_ID","GOOGLE_CLIENT_SECRET","GOOGLE_REDIRECT_URI"))
     })
 
@@ -209,7 +225,7 @@ async def open_browser(slot:int,request:Request):
     with db_conn() as db:username=account(db,slot)
     try:await browser_manager.open(slot,username)
     except RuntimeError as exc:raise HTTPException(503,str(exc)) from exc
-    return {"ok":True,"slot":slot,"viewport":{"width":960,"height":720}}
+    return {"ok":True,"slot":slot,"viewport":VIEWPORT}
 
 @router.post("/api/browser/close")
 async def close_browser(request:Request):
@@ -289,22 +305,22 @@ async def navigate_remote_browser(slot:int,payload:NavigatePayload,request:Reque
 async def record_click(slot:int,payload:ClickPayload,request:Request):
     write(request)
     with db_conn() as db:account(db,slot)
-    # Login, password and verification clicks are never saved, even if the
-    # training checkbox was accidentally left enabled.
+    # Login, passwords and verification clicks are never saved.
     try:
-        protected=await browser_manager.is_login_screen(slot)
-        await browser_manager.click(slot,payload.x,payload.y)
+        captured=await browser_manager.click_and_describe(slot,payload.x,payload.y)
     except RuntimeError as exc:
         raise HTTPException(409,str(exc)) from None
-    if protected:
-        return {"ok":True,"recorded":False,"note":"Login: clique realizado sem gravação"}
+    if captured["protected"] or captured["label"]=="Autenticação":
+        return {"ok":True,"recorded":False,"note":"Autenticação: clique realizado sem gravação"}
     with db_conn() as db:
         init(db)
         with db.cursor() as c:
-            c.execute("INSERT INTO social_mb_recordings(slot,kind,x,y) VALUES(%s,'click',%s,%s)",
-                      (slot,round(payload.x),round(payload.y)))
+            c.execute("""INSERT INTO social_mb_recordings(slot,kind,x,y,selector,label)
+              VALUES(%s,'click',%s,%s,%s,%s)""",
+              (slot,round(payload.x),round(payload.y),captured["selector"],captured["label"]))
         db.commit()
-    return {"ok":True,"recorded":True,"note":"Coordenada de treino registrada"}
+    return {"ok":True,"recorded":True,"method":"element" if captured["selector"] else "coordinates",
+            "note":"HTML e coordenadas registrados" if captured["selector"] else "Coordenadas registradas"}
 
 @router.get("/api/browser/{slot}/recording")
 def recording(slot:int,request:Request):
@@ -313,9 +329,27 @@ def recording(slot:int,request:Request):
         account(db,slot)
         init(db)
         with db.cursor() as c:
-            c.execute("SELECT id,kind,x,y FROM social_mb_recordings WHERE slot=%s ORDER BY id",(slot,))
+            c.execute("SELECT id,kind,x,y,selector,label FROM social_mb_recordings WHERE slot=%s ORDER BY id",(slot,))
             rows=c.fetchall()
     return {"steps":rows}
+
+@router.post("/api/browser/{slot}/replay-step")
+async def replay_step(slot:int,payload:ReplayPayload,request:Request):
+    write(request)
+    with db_conn() as db:
+        account(db,slot)
+        init(db)
+        with db.cursor() as c:
+            c.execute("""SELECT x,y,selector FROM social_mb_recordings
+              WHERE id=%s AND slot=%s AND kind='click'""",(payload.step_id,slot))
+            step=c.fetchone()
+    if not step:
+        raise HTTPException(404,"Etapa não encontrada nesta conta")
+    try:
+        outcome=await browser_manager.replay_training_click(slot,step["x"],step["y"],step["selector"])
+    except RuntimeError as exc:
+        raise HTTPException(409,str(exc)) from None
+    return {"ok":True,**outcome}
 
 @router.delete("/api/browser/{slot}/recording")
 def clear_recording(slot:int,request:Request):
@@ -356,10 +390,12 @@ def save_training_flow(payload:SaveTrainingFlow,request:Request):
         init(db)
         account(db,payload.slot)
         with db.cursor() as c:
-            c.execute("SELECT x,y,kind FROM social_mb_recordings WHERE slot=%s ORDER BY id LIMIT 101",(payload.slot,))
+            c.execute("SELECT x,y,kind,selector,label FROM social_mb_recordings WHERE slot=%s ORDER BY id LIMIT 101",(payload.slot,))
             rows=c.fetchall()
             if not rows or len(rows)>100:raise HTTPException(409,"Grave de 1 a 100 cliques antes de salvar")
-            steps=[{"x":int(r["x"]),"y":int(r["y"])} for r in rows if r["kind"]=="click"]
+            steps=[{"x":int(r["x"]),"y":int(r["y"]),
+                     "selector":r.get("selector"),"label":r.get("label")}
+                   for r in rows if r["kind"]=="click"]
             if not steps:raise HTTPException(409,"Sem cliques para salvar")
             c.execute("INSERT INTO social_mb_saved_flows(name,origin_slot,steps_json) VALUES(%s,%s,%s)",
                       (title,payload.slot,json.dumps(steps,separators=(",",":"))))
@@ -382,11 +418,17 @@ def load_training_flow(flow_id:int,payload:LoadTrainingFlow,request:Request):
             if not isinstance(steps,list) or not 1<=len(steps)<=100:
                 raise HTTPException(409,"Quantidade de cliques inválida")
             for x in steps:
-                if not isinstance(x,dict) or type(x.get("x")) is not int or type(x.get("y")) is not int or not 0<=x["x"]<=960 or not 0<=x["y"]<=720:
+                if not isinstance(x,dict) or type(x.get("x")) is not int or type(x.get("y")) is not int or not 0<=x["x"]<=VIEWPORT["width"] or not 0<=x["y"]<=VIEWPORT["height"]:
                     raise HTTPException(409,"Coordenadas inválidas")
+                if x.get("selector") is not None and (not isinstance(x["selector"],str) or len(x["selector"])>1024):
+                    raise HTTPException(409,"Seletor inválido")
+                if x.get("label") is not None and (not isinstance(x["label"],str) or len(x["label"])>120):
+                    raise HTTPException(409,"Rótulo inválido")
             c.execute("DELETE FROM social_mb_recordings WHERE slot=%s",(payload.slot,))
-            c.executemany("INSERT INTO social_mb_recordings(slot,kind,x,y) VALUES(%s,'click',%s,%s)",
-                          [(payload.slot,x["x"],x["y"]) for x in steps])
+            for step in steps:
+                c.execute("""INSERT INTO social_mb_recordings(slot,kind,x,y,selector,label)
+                    VALUES(%s,'click',%s,%s,%s,%s)""",
+                    (payload.slot,step["x"],step["y"],step.get("selector"),step.get("label")))
         db.commit()
     return {"ok":True,"steps":len(steps)}
 
