@@ -69,12 +69,43 @@ class BrowserManager:
             except Exception: return None
 
     async def click(self,slot,x,y):
-        async with self.lock: await self._page_for(slot).mouse.click(x,y,timeout=10000)
+        # Mouse.click takes x/y, but does not accept a timeout argument.
+        async with self.lock:
+            try:
+                await self._page_for(slot).mouse.click(x,y)
+            except RuntimeError:
+                raise
+            except Exception:
+                raise RuntimeError("Falha ao clicar na tela remota. Atualize a imagem ou reabra o navegador.") from None
 
     async def type_text(self,slot,value):
-        async with self.lock: await self._page_for(slot).keyboard.insert_text(value)
+        async with self.lock:
+            try: await self._page_for(slot).keyboard.insert_text(value)
+            except RuntimeError: raise
+            except Exception:
+                raise RuntimeError("Falha ao digitar. Verifique se o navegador continua aberto.") from None
 
     async def press(self,slot,key):
-        async with self.lock: await self._page_for(slot).keyboard.press(key)
+        async with self.lock:
+            try: await self._page_for(slot).keyboard.press(key)
+            except RuntimeError: raise
+            except Exception:
+                raise RuntimeError("Falha ao enviar tecla. Verifique se o navegador continua aberto.") from None
+
+    async def fill_login_field(self,slot,field,value):
+        """Fill only the actual Instagram login control; no credential persistence."""
+        if field not in ("username","password"):
+            raise RuntimeError("Campo de login inválido")
+        async with self.lock:
+            page=self._page_for(slot)
+            from urllib.parse import urlsplit
+            if urlsplit(page.url).hostname not in ("instagram.com","www.instagram.com"):
+                raise RuntimeError("Navegador não está no Instagram")
+            selector=('input[name="username"]' if field=="username" else
+                      'input[name="password"], input[type="password"]')
+            try:
+                await page.locator(selector).first.fill(value,timeout=7500)
+            except Exception:
+                raise RuntimeError("Campo de login indisponível. Confirme que o Instagram está na tela de login.") from None
 
 browser_manager=BrowserManager()
