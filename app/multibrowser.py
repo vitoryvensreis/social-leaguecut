@@ -320,7 +320,7 @@ async def record_click(slot:int,payload:ClickPayload,request:Request):
               (slot,round(payload.x),round(payload.y),captured["selector"],captured["label"]))
         db.commit()
     return {"ok":True,"recorded":True,"method":"element" if captured["selector"] else "coordinates",
-            "note":"HTML e coordenadas registrados" if captured["selector"] else "Coordenadas registradas"}}
+            "note":"HTML e coordenadas registrados" if captured["selector"] else "Coordenadas registradas"}
 
 @router.get("/api/browser/{slot}/recording")
 def recording(slot:int,request:Request):
