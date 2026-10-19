@@ -1,5 +1,5 @@
 """Authenticated MultiBrowser administration and supervised remote browser control."""
-import os, re, secrets
+import os, re, secrets, json
 from pathlib import Path
 from urllib.parse import urlsplit
 from fastapi import APIRouter, Request, HTTPException
@@ -27,6 +27,13 @@ class ClickPayload(BaseModel):
 
 class TypePayload(BaseModel):
     text:str=Field(min_length=1,max_length=2200)
+
+class SaveTrainingFlow(BaseModel):
+    slot:int=Field(ge=1,le=16)
+    name:str=Field(min_length=2,max_length=100)
+
+class LoadTrainingFlow(BaseModel):
+    slot:int=Field(ge=1,le=16)
 
 class KeyPayload(BaseModel):
     key:str=Field(pattern=r"^(Enter|Tab|Escape|Backspace|ArrowLeft|ArrowRight|ArrowUp|ArrowDown)$")
@@ -62,6 +69,13 @@ def init(db):
         c.execute("""CREATE TABLE IF NOT EXISTS social_mb_captions (
           id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,title VARCHAR(100) NOT NULL,
           body TEXT NOT NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci""")
+        c.execute("""CREATE TABLE IF NOT EXISTS social_mb_saved_flows (
+          id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(100) NOT NULL,
+          origin_slot TINYINT UNSIGNED NOT NULL,
+          steps_json MEDIUMTEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci""")
         c.execute("""CREATE TABLE IF NOT EXISTS social_mb_recordings (
           id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -290,3 +304,65 @@ def replay_preview(slot:int,request:Request):
             rows=c.fetchall()
     if not rows:raise HTTPException(409,"Nenhum clique gravado")
     return {"steps":rows,"note":"Prévia somente; nenhuma publicação ou replay executado"}
+
+@router.get("/api/training/flows")
+def list_training_flows(request:Request):
+    auth(request)
+    with db_conn() as db:
+        init(db)
+        with db.cursor() as c:
+            c.execute("SELECT id,name,origin_slot,steps_json FROM social_mb_saved_flows ORDER BY id DESC LIMIT 100")
+            rows=c.fetchall()
+    return {"flows":[{"id":r["id"],"name":r["name"],"slot":r["origin_slot"],"steps":len(json.loads(r["steps_json"]))} for r in rows]}
+
+@router.post("/api/training/flows")
+def save_training_flow(payload:SaveTrainingFlow,request:Request):
+    write(request)
+    title=payload.name.strip()
+    if len(title)<2:raise HTTPException(422,"Informe o nome do fluxo")
+    with db_conn() as db:
+        init(db)
+        account(db,payload.slot)
+        with db.cursor() as c:
+            c.execute("SELECT x,y,kind FROM social_mb_recordings WHERE slot=%s ORDER BY id LIMIT 101",(payload.slot,))
+            rows=c.fetchall()
+            if not rows or len(rows)>100:raise HTTPException(409,"Grave de 1 a 100 cliques antes de salvar")
+            steps=[{"x":int(r["x"]),"y":int(r["y"])} for r in rows if r["kind"]=="click"]
+            if not steps:raise HTTPException(409,"Sem cliques para salvar")
+            c.execute("INSERT INTO social_mb_saved_flows(name,origin_slot,steps_json) VALUES(%s,%s,%s)",
+                      (title,payload.slot,json.dumps(steps,separators=(",",":"))))
+            ident=c.lastrowid
+        db.commit()
+    return {"ok":True,"id":ident,"steps":len(steps)}
+
+@router.post("/api/training/flows/{flow_id}/load")
+def load_training_flow(flow_id:int,payload:LoadTrainingFlow,request:Request):
+    write(request)
+    with db_conn() as db:
+        init(db)
+        account(db,payload.slot)
+        with db.cursor() as c:
+            c.execute("SELECT steps_json FROM social_mb_saved_flows WHERE id=%s",(flow_id,))
+            row=c.fetchone()
+            if not row:raise HTTPException(404,"Fluxo não encontrado")
+            try:steps=json.loads(row["steps_json"])
+            except (ValueError,TypeError):raise HTTPException(409,"Fluxo inválido") from None
+            if not isinstance(steps,list) or not 1<=len(steps)<=100:
+                raise HTTPException(409,"Quantidade de cliques inválida")
+            for x in steps:
+                if not isinstance(x,dict) or type(x.get("x")) is not int or type(x.get("y")) is not int or not 0<=x["x"]<=960 or not 0<=x["y"]<=720:
+                    raise HTTPException(409,"Coordenadas inválidas")
+            c.execute("DELETE FROM social_mb_recordings WHERE slot=%s",(payload.slot,))
+            c.executemany("INSERT INTO social_mb_recordings(slot,kind,x,y) VALUES(%s,'click',%s,%s)",
+                          [(payload.slot,x["x"],x["y"]) for x in steps])
+        db.commit()
+    return {"ok":True,"steps":len(steps)}
+
+@router.delete("/api/training/flows/{flow_id}")
+def delete_training_flow(flow_id:int,request:Request):
+    write(request)
+    with db_conn() as db:
+        init(db)
+        with db.cursor() as c:c.execute("DELETE FROM social_mb_saved_flows WHERE id=%s",(flow_id,))
+        db.commit()
+    return {"ok":True}
