@@ -92,6 +92,46 @@ class BrowserManager:
             except Exception:
                 raise RuntimeError("Falha ao enviar tecla. Verifique se o navegador continua aberto.") from None
 
+    async def is_login_screen(self,slot):
+        """Never record clicks on a screen with a password field or login URL."""
+        async with self.lock:
+            page=self._page_for(slot)
+            url=str(page.url or "").lower()
+            if any(t in url for t in ("/accounts/login","/challenge/","/two_factor/","/accounts/signup")):
+                return True
+            try:
+                return await page.locator('input[type="password"]').count()>0
+            except Exception:
+                return False
+
+    async def wheel(self,slot,dx,dy):
+        """Scroll the active Chromium page like a physical mouse wheel."""
+        async with self.lock:
+            try:
+                await self._page_for(slot).mouse.wheel(dx,dy)
+            except RuntimeError:
+                raise
+            except Exception:
+                raise RuntimeError("Não foi possível rolar a página do navegador.") from None
+
+    async def navigate(self,slot,action):
+        """Basic browsing controls, without recording or changing sessions."""
+        if action not in ("back","forward","reload"):
+            raise RuntimeError("Ação de navegação inválida")
+        async with self.lock:
+            page=self._page_for(slot)
+            try:
+                if action=="back":
+                    await page.go_back(wait_until="domcontentloaded",timeout=15000)
+                elif action=="forward":
+                    await page.go_forward(wait_until="domcontentloaded",timeout=15000)
+                else:
+                    await page.reload(wait_until="domcontentloaded",timeout=20000)
+            except RuntimeError:
+                raise
+            except Exception:
+                raise RuntimeError("Não foi possível navegar. Verifique a sessão remota.") from None
+
     async def fill_login_field(self,slot,field,value):
         """Fill only the actual Instagram login control; no credential persistence."""
         if field not in ("username","password"):
