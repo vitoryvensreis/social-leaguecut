@@ -10,12 +10,12 @@ from app import multibrowser
 
 class ValidationTests(unittest.TestCase):
     def test_sixteen_slots(self):self.assertEqual(multibrowser.SLOTS,16)
-    def test_fixed_viewport(self):self.assertEqual(VIEWPORT,{"width":960,"height":720})
+    def test_fixed_viewport(self):self.assertEqual(VIEWPORT,{"width":1280,"height":800})
     def test_names(self):
         self.assertTrue(multibrowser.NAME.fullmatch("augusto14082"))
         self.assertFalse(multibrowser.NAME.fullmatch("bad@example.com"))
     def test_invalid_click(self):
-        with self.assertRaises(ValidationError):multibrowser.ClickPayload(x=970,y=10)
+        with self.assertRaises(ValidationError):multibrowser.ClickPayload(x=1400,y=10)
     def test_key_whitelist(self):
         with self.assertRaises(ValidationError):multibrowser.KeyPayload(key="Control+Shift+I")
 
@@ -60,7 +60,7 @@ class ValidationTests(unittest.TestCase):
         self.assertIn('id="tab-contas"',s)
         self.assertIn('id="tab-legendas"',s)
         self.assertIn('id="tilesRail"',s)
-        self.assertIn('aspect-ratio:4/3',s)
+        self.assertIn('aspect-ratio:8/5',s)
         self.assertIn('clamp(460px,28vw,700px)',s)
         self.assertIn('flex-wrap:nowrap!important',s)
         self.assertIn('id="trainScreen"',s)
@@ -78,7 +78,7 @@ class ValidationTests(unittest.TestCase):
         source=(Path(__file__).parent.parent/"app/multibrowser.py").read_text(encoding="utf-8")
         self.assertIn("social_mb_saved_flows",source)
         self.assertIn('"/api/training/flows"',source)
-        self.assertIn("executemany",source)
+        self.assertIn("replay-step",source)
 
     def test_template_inline_javascript_syntax(self):
         import shutil, subprocess
@@ -96,7 +96,7 @@ class ValidationTests(unittest.TestCase):
         env=Environment(loader=FileSystemLoader(str(templates)),autoescape=True)
         html=env.get_template("multibrowser.html").render(
             csrf="test",slots=range(1,17),byslot={},captions=[],error="",
-            drive_configured=False
+            drive_configured=False,viewport=VIEWPORT
         )
         self.assertIn('id="tileShot16"',html)
         self.assertIn('id="tileShot1"',html)
@@ -180,7 +180,7 @@ class BrowserTests(unittest.IsolatedAsyncioTestCase):
         html=(Path(__file__).parent.parent/"app/templates/multibrowser.html").read_text()
         self.assertIn('type="password"',html)
         self.assertIn("input.value=''",html)
-        self.assertIn("img.naturalWidth||960",html)
+        self.assertIn("img.naturalWidth||VIEWPORT.width",html)
 
 
     async def test_remote_scroll(self):
