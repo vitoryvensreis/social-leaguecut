@@ -93,6 +93,25 @@ jobs:
           if ! .venv/bin/python -m playwright install chromium; then
             echo '::warning::Chromium download failed; remote browser needs host setup before first login.'
           fi
+          .venv/bin/python - <<'PY'
+          import asyncio, tempfile
+          from playwright.async_api import async_playwright
+          async def check():
+              with tempfile.TemporaryDirectory(prefix='social-mb-smoke-') as directory:
+                  async with async_playwright() as p:
+                      ctx=await p.chromium.launch_persistent_context(
+                          directory,headless=True,viewport={"width":960,"height":720},
+                          args=["--disable-dev-shm-usage"])
+                      try:
+                          page=ctx.pages[0] if ctx.pages else await ctx.new_page()
+                          await page.goto("about:blank")
+                          data=await page.screenshot(type="jpeg",quality=60)
+                          assert len(data)>500,"Empty screenshot"
+                          print("REMOTE_CHROMIUM_SMOKE_OK",len(data),"bytes")
+                      finally:
+                          await ctx.close()
+          asyncio.run(check())
+          PY
           .venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
           sudo -n /usr/bin/systemctl restart social-leaguecut.service
           healthy=0
