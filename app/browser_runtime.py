@@ -1,0 +1,80 @@
+"""Persistent single-active-browser manager for 16 fixed Instagram slots."""
+import asyncio, os, re
+from pathlib import Path
+VIEWPORT={"width":960,"height":720}
+
+class BrowserManager:
+    def __init__(self):
+        self.active_slot=None
+        self.active_username=None
+        self.context=None
+        self.page=None
+        self.driver=None
+        self.lock=asyncio.Lock()
+
+    def _directory(self,slot,username):
+        if not re.fullmatch(r"[a-z0-9._]{1,30}",username):
+            raise RuntimeError("Usuário inválido")
+        base=Path(os.getenv("LEAGUECUT_BROWSER_DIR",str(Path.home()/".local/share/leaguecut-browser")))
+        base.mkdir(parents=True,exist_ok=True,mode=0o700)
+        try: base.chmod(0o700)
+        except OSError: pass
+        path=base/f"slot-{slot:02d}-{username}"
+        path.mkdir(parents=True,exist_ok=True,mode=0o700)
+        return path
+
+    async def open(self,slot,username):
+        async with self.lock:
+            if self.context is not None and self.active_slot==slot and self.active_username==username:
+                return
+            await self._close_unlocked()
+            try:
+                from playwright.async_api import async_playwright
+                self.driver=await async_playwright().start()
+                headless=os.getenv("LEAGUECUT_BROWSER_HEADLESS","1")=="1" or not os.getenv("DISPLAY")
+                self.context=await self.driver.chromium.launch_persistent_context(
+                    user_data_dir=str(self._directory(slot,username)),headless=headless,
+                    viewport=VIEWPORT,device_scale_factor=1,accept_downloads=False,
+                    locale="pt-BR",args=["--no-first-run","--disable-dev-shm-usage"])
+                self.page=self.context.pages[0] if self.context.pages else await self.context.new_page()
+                self.active_slot,self.active_username=slot,username
+                await self.page.goto("https://www.instagram.com/",wait_until="domcontentloaded",timeout=45000)
+            except Exception as exc:
+                await self._close_unlocked()
+                raise RuntimeError(f"Falha ao iniciar Chromium ({type(exc).__name__}). Confira a instalação Playwright na VPS.") from None
+
+    async def _close_unlocked(self):
+        context,driver=self.context,self.driver
+        self.context=self.page=self.driver=None
+        self.active_slot=self.active_username=None
+        if context:
+            try: await asyncio.wait_for(context.close(),timeout=12)
+            except Exception: pass
+        if driver:
+            try: await driver.stop()
+            except Exception: pass
+
+    async def close(self):
+        async with self.lock: await self._close_unlocked()
+
+    def _page_for(self,slot):
+        if slot!=self.active_slot or self.page is None:
+            raise RuntimeError("Abra o navegador desta conta primeiro")
+        return self.page
+
+    async def screenshot(self,slot):
+        async with self.lock:
+            if self.active_slot!=slot or self.page is None: return None
+            try: return await self.page.screenshot(type="jpeg",quality=68,timeout=10000)
+            except Exception: return None
+
+    async def click(self,slot,x,y):
+        async with self.lock: await self._page_for(slot).mouse.click(x,y,timeout=10000)
+
+    async def type_text(self,slot,value):
+        async with self.lock: await self._page_for(slot).keyboard.insert_text(value)
+
+    async def press(self,slot,key):
+        async with self.lock: await self._page_for(slot).keyboard.press(key)
+
+browser_manager=BrowserManager()

@@ -1,15 +1,111 @@
-name: Deploy Social LeagueCut (retired)
+name: Deploy Social LeagueCut
 
-# This application's VPS deployment was intentionally retired.
-# The standalone one-account Instagrapi test runs locally on Windows.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: social-leaguecut-production
+  cancel-in-progress: false
+
 jobs:
-  retired:
-    runs-on: ubuntu-24.04
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - run: echo "Old Social LeagueCut VPS deploy retired; no server changes are performed."
+      - name: Validate SSH configuration
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          USER: ${{ secrets.VPS_USER }}
+          KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST_KEYS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          for value in "$HOST" "$USER" "$KEY" "$HOST_KEYS"; do
+            if [ -z "$value" ]; then
+              echo "::error::Missing VPS SSH configuration. Configure VPS_KNOWN_HOSTS and existing VPS_* secrets."
+              exit 1
+            fi
+          done
+
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Wait for VPS SSH reachability
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          set -euo pipefail
+          PORT="${VPS_PORT:-22}"
+          reachable=0
+          for attempt in 1 2 3 4; do
+            echo "SSH preflight attempt $attempt/4"
+            if ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+                -o ConnectTimeout=10 -o ConnectionAttempts=1 \
+                -p "$PORT" "$VPS_USER@$VPS_HOST" 'printf SSH_READY' \
+                | grep -q 'SSH_READY'; then
+              reachable=1
+              break
+            fi
+            if [ "$attempt" -lt 4 ]; then sleep 10; fi
+          done
+          if [ "$reachable" -ne 1 ]; then
+            echo "::error::VPS SSH unreachable on configured port after four attempts. Check VPS firewall, public IP and VPS_PORT."
+            exit 1
+          fi
+
+      - name: Update project checkout
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          PORT="${VPS_PORT:-22}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 -p "$PORT" "$VPS_USER@$VPS_HOST" \
+            "EXPECTED_SHA='$EXPECTED_SHA' bash -se" <<'REMOTE'
+          set -euo pipefail
+          cd /home/leaguecut-social-motor/htdocs/social.leaguecut.com.br
+          test "$(id -un)" = "leaguecut-social-motor"
+          test "$(git remote get-url origin)" = "https://github.com/vitoryvensreis/social-leaguecut.git"
+          test "$(git branch --show-current)" = "main"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          git fetch --prune origin main
+          git merge --ff-only origin/main
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          echo "Repository synchronized at $(git rev-parse --short HEAD)"
+          test -x .venv/bin/python
+          .venv/bin/python -m pip install -r requirements.txt
+          .venv/bin/python -c 'from app.main import app; print("Application import OK")'
+          if ! .venv/bin/python -m playwright install chromium; then
+            echo '::warning::Chromium download failed; remote browser needs host setup before first login.'
+          fi
+          .venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v
+          sudo -n /usr/bin/systemctl restart social-leaguecut.service
+          healthy=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent --max-time 3 http://127.0.0.1:8090/health | grep -q '"status":"ok"'; then
+              healthy=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$healthy" -ne 1 ]; then
+            echo "Health check failed after service restart" >&2
+            exit 1
+          fi
+          echo "Deployment finished and health check passed."
+          REMOTE
