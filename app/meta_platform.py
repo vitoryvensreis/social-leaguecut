@@ -600,8 +600,20 @@ async def upload(request: Request, csrf: str = Form(...), video: UploadFile = Fi
         raise
     finally:
         await video.close()
-    return JSONResponse({"url": PUBLIC_URL + "/media/" + name, "bytes": total},
+    return JSONResponse({"url": PUBLIC_URL + "/ig-video/" + name[:-4], "bytes": total},
         headers={"Cache-Control": "no-store"})
+
+@app.api_route("/ig-video/{opaque_id}", methods=["GET", "HEAD"])
+def ig_video(opaque_id: str):
+    """Public MP4 route without filename extension to bypass Nginx static-file rules."""
+    if not re.fullmatch(r"[0-9a-f]{40}", opaque_id):
+        raise HTTPException(status_code=404)
+    file = MEDIA_DIR / (opaque_id + ".mp4")
+    if not file.is_file():
+        raise HTTPException(status_code=404)
+    return FileResponse(file, media_type="video/mp4",
+        headers={"Cache-Control":"public, max-age=3600",
+                 "Accept-Ranges":"bytes","X-Content-Type-Options":"nosniff"})
 
 @app.api_route("/media/{name}", methods=["GET", "HEAD"])
 def media(name: str):
@@ -612,6 +624,11 @@ def media(name: str):
         raise HTTPException(status_code=404)
     return FileResponse(file, media_type="video/mp4",
         headers={"Cache-Control": "public, max-age=3600", "Accept-Ranges": "bytes"})
+
+def normalize_owned_video_url(video_url):
+    """Update legacy scheduled media URLs without reposting failed jobs."""
+    match = re.fullmatch(re.escape(PUBLIC_URL) + r"/media/([0-9a-f]{40})\.mp4", video_url or "")
+    return (PUBLIC_URL + "/ig-video/" + match.group(1)) if match else video_url
 
 def get_token(db, account_id):
     with db.cursor() as c:
@@ -735,7 +752,7 @@ def publish_cycle(db, limit=20):
                 if not set_state(db,pid,"scheduled","creating"):
                     continue
                 created = graph(ig_id+"/media",token,{
-                    "media_type":"REELS","video_url":job["video_url"],
+                    "media_type":"REELS","video_url":normalize_owned_video_url(job["video_url"]),
                     "caption":job["caption"],"share_to_feed":"true"},"POST")
                 if not created.get("id"):
                     raise GraphError("A Meta não informou o contêiner do vídeo.")
