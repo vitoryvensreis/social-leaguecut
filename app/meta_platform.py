@@ -230,11 +230,10 @@ def home(request: Request):
                 with db.cursor() as c:
                     c.execute("""SELECT a.id,a.username,a.ig_scoped_id,a.instagram_user_id,
                             a.status,a.error_hint,a.token_saved_at,
-                            COUNT(p.id) jobs,
-                            SUM(p.status='published') published
-                        FROM meta_accounts a
-                        LEFT JOIN meta_posts p ON p.account_id=a.id
-                        GROUP BY a.id ORDER BY a.username""")
+                            (SELECT COUNT(*) FROM meta_posts p WHERE p.account_id=a.id) jobs,
+                            (SELECT COUNT(*) FROM meta_posts p WHERE p.account_id=a.id
+                              AND p.status='published') published
+                        FROM meta_accounts a ORDER BY a.username""")
                     values["accounts"] = c.fetchall()
                     c.execute("""SELECT p.id,p.caption,p.scheduled_at_utc,p.status,
                             p.container_id,p.media_id,p.permalink,p.error_hint,
@@ -470,12 +469,14 @@ def media(name: str):
 
 def get_token(db, account_id):
     with db.cursor() as c:
-        c.execute("SELECT token_encrypted,ig_scoped_id FROM meta_accounts WHERE id=%s AND status='active'",
+        c.execute("""SELECT token_encrypted,
+                  COALESCE(NULLIF(instagram_user_id,''),ig_scoped_id) AS publish_id
+                  FROM meta_accounts WHERE id=%s AND status='active'""",
                   (account_id,))
         data = c.fetchone()
     if not data:
         raise GraphError("Conta inexistente ou pausada.")
-    return unseal(data["token_encrypted"]), data["ig_scoped_id"]
+    return unseal(data["token_encrypted"]), data["publish_id"]
 
 def set_state(db, post_id, expected, new, **fields):
     assignments = ["status=%s"]
