@@ -104,6 +104,13 @@ def init(db):
             checked_at DATETIME NOT NULL,
             PRIMARY KEY (post_id,capture_day)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""")
+        c.execute("""CREATE TABLE IF NOT EXISTS meta_publish_checks (
+            post_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+            provider_status VARCHAR(32) NOT NULL,
+            provider_detail VARCHAR(255) NULL,
+            checked_at DATETIME NOT NULL,
+            checks INT UNSIGNED NOT NULL DEFAULT 1
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""")
     db.commit()
     init_extra(db)
 
@@ -257,11 +264,14 @@ def home(request: Request):
                             p.container_id,p.media_id,p.permalink,p.error_hint,
                             p.video_url,p.published_at,a.username,
                             m.views,m.reach,m.likes,m.comments,m.saved,m.shares,m.checked_at,
-                            d.media_type,d.product_type,d.thumbnail_url,d.media_url
+                            d.media_type,d.product_type,d.thumbnail_url,d.media_url,
+                            chk.provider_status,chk.provider_detail,
+                            chk.checked_at AS provider_checked_at
                         FROM meta_posts p
                         JOIN meta_accounts a ON a.id=p.account_id
                         LEFT JOIN meta_metrics m ON m.post_id=p.id
                         LEFT JOIN meta_media_details d ON d.media_id=p.media_id
+                        LEFT JOIN meta_publish_checks chk ON chk.post_id=p.id
                         ORDER BY p.scheduled_at_utc DESC LIMIT 200""")
                     values["posts"] = c.fetchall()
                     c.execute("""SELECT
@@ -293,6 +303,7 @@ def home(request: Request):
                 p["scheduled_local"] = fmt_local(p["scheduled_at_utc"])
                 p["published_local"] = fmt_local(p["published_at"])
                 p["checked_local"] = fmt_local(p["checked_at"])
+                p["provider_checked_local"] = fmt_local(p.get("provider_checked_at"))
         except Exception:
             LOG.exception("Dashboard database error")
             values["error"] = "Erro ao consultar MySQL. Confira o serviço e as configurações."
