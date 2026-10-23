@@ -47,3 +47,22 @@ Tokens são gerados manualmente. O armazenamento não estende sua validade. Conf
 - Caso a Meta aceite a publicação mas a resposta se perca, o post fica em `needs_review` e exige conferência manual antes de novo agendamento.
 - Apenas métricas permitidas pelo token podem ser lidas.
 - O antigo banco é preservado, pois apagar tabelas ou gravações automaticamente seria destrutivo.
+
+## Nova interface — conexão, agendamento e métricas
+- Tela **Perfis conectados**: nome, username, avatar, tipo do perfil, seguidores, seguindo, total de publicações, dados diários disponíveis e data da última sincronização.
+- **Conectar conta**: depois de cadastrar o token manualmente, tenta importar os 25 conteúdos recentes. O botão **Sincronizar dados** de cada perfil importa até 50 itens, sem apagar conteúdos previamente salvos.
+- **Novo Reel**: escolha um MP4 e o upload inicia automaticamente. O URL HTTPS é preenchido pelo sistema em campo oculto; campo de URL manual é uma opção avançada. Legenda, seleção de contas e horário continuam disponíveis.
+- **Agendamento em lote**: múltiplos arquivos, sequência por dia e intervalo entre perfis.
+- **Posts e Analytics**: mídia importada do Instagram + publicações feitas pelo Studio, miniaturas, permalink, status, visualizações, curtidas, comentários, alcance, salvamentos e compartilhamentos quando a API fornecer. Ranking top 5 por visualizações conhecidas.
+- **Métricas de conta**: leituras diárias disponíveis via Insights; o painel mostra o dia de medição e 'N/D' quando a Meta não retornar o indicador.
+- **Histórico**: tabela `meta_metric_history` com uma amostra diária por mídia. Leituras das mídias publicadas/importadas são feitas pelo worker periodicamente (até 12 posts por ciclo; cada um elegível após 6 horas).
+- **Privacidade e idempotência**: tokens seguem cifrados e ausentes da interface, posts importados são vinculados pelo ID de mídia da Meta para não duplicar. As tabelas antigas continuam intactas.
+
+### Como testar
+1. Entre em https://social.leaguecut.com.br/ com o usuário admin.
+2. Em **Seus perfis Instagram**, clique em **Sincronizar dados** para a conta de teste já cadastrada.
+3. Confira se nome, quantidade de posts e miniaturas são preenchidos; campos vazios podem depender de permissões.
+4. Em **Criar e agendar Reel**, escolha o MP4 e espere o aviso 'Vídeo enviado e pronto para agendar'. **Não é preciso preencher a URL**.
+5. Escolha um horário futuro, faça uma única publicação de teste e confira a postagem no Instagram antes de distribuir em lote.
+
+> Importante: a execução do GitHub Actions testa importação, templates e saúde do serviço, não substitui uma prova com token real. Em modo desenvolvimento o token só funciona para perfis autorizados. Na Meta, habilite as permissões adequadas para conteúdo, gerenciamento de perfil e Insights. Algumas métricas não são disponibilizadas para todos os conteúdos, contas ou períodos.
