@@ -144,18 +144,21 @@ details{border:1px solid #373b49;border-radius:10px;padding:12px 14px;background
 <div class="ranking">{% for p in top_posts %}<div class="rankrow"><div class="rankname" title="@{{p.username}} · {{p.caption or 'Publicação'}}">{{loop.index}}. {% if p.permalink %}<a href="{{p.permalink}}" target="_blank" rel="noopener noreferrer">@{{p.username}} ↗</a>{% else %}@{{p.username}}{% endif %}</div><div class="ranktrack"><div class="rankfill" style="width:{{(p.views / top_max * 100)|round|int}}%"></div></div><div class="rankvalue">{{"{:,}".format(p.views).replace(",",".")}}</div></div>{% endfor %}</div></div>{% endif %}
 <div class="posts" id="postsList">
 {% for p in posts %}
-<article class="post" data-account="{{p.username}}" data-status="{{p.status}}">
+<article class="post" data-post-id="{{p.id}}" data-account="{{p.username}}" data-status="{{p.status}}">
 {% if p.thumbnail_url and p.thumbnail_url.startswith('https://') %}<img class="thumb" loading="lazy" referrerpolicy="no-referrer" src="{{p.thumbnail_url}}" alt="Miniatura da publicação">
 {% elif p.media_url and p.media_type=='IMAGE' and p.media_url.startswith('https://') %}<img class="thumb" loading="lazy" referrerpolicy="no-referrer" src="{{p.media_url}}" alt="Publicação">
 {% else %}<div class="thumb thumbempty">▶</div>{% endif %}
 <div class="post-title"><strong>{{p.caption[:75] if p.caption else ('Reel programado' if p.status in ['scheduled','creating','processing','publishing'] else 'Publicação no Instagram')}}</strong><p>@{{p.username}} · {{'Reel' if p.product_type=='REELS' else p.media_type or 'Vídeo'}}</p><small>{{'Programado: ' if p.status in ['scheduled','creating','processing','publishing'] else 'Publicado: '}}{{p.scheduled_local}}{% if p.checked_at %} · Métricas lidas: {{p.checked_local}}{% endif %}</small></div>
-<div class="poststatus"><span class="pill {{p.status}}">{{'No Instagram' if p.status=='imported' else 'Publicado' if p.status=='published' else 'Agendado' if p.status=='scheduled' else 'Em processamento' if p.status in ['processing','creating','publishing'] else 'Revisar' if p.status=='needs_review' else 'Falhou' if p.status=='failed' else 'Cancelado' if p.status=='cancelled' else p.status}}</span>
-{% if p.error_hint %}<div class="micro" style="color:var(--orange);margin-top:6px">{{p.error_hint}}</div>{% endif %}</div>
+<div class="poststatus"><span class="pill job-state {{p.status}}">{{'No Instagram' if p.status=='imported' else 'Publicado' if p.status=='published' else 'Agendado' if p.status=='scheduled' else 'Processando na Meta' if p.status=='processing' else 'Criando conteúdo' if p.status=='creating' else 'Publicando na Meta' if p.status=='publishing' else 'Precisa verificar' if p.status=='needs_review' else 'Falhou' if p.status=='failed' else 'Cancelado' if p.status=='cancelled' else p.status}}</span>
+<div class="micro job-detail" style="color:var(--orange);margin-top:6px">{% if p.error_hint %}{{p.error_hint}}{% elif p.provider_status %}Meta: {{p.provider_status}} · {{p.provider_checked_local}}{% elif p.status=='processing' %}Aguardando a primeira verificação do contêiner…{% endif %}</div></div>
 <div class="poststats"><div><b>{{"{:,}".format(p.views).replace(",",".") if p.views is not none else "N/D"}}</b><span>Views</span></div><div><b>{{"{:,}".format(p.likes).replace(",",".") if p.likes is not none else "N/D"}}</b><span>Curtidas</span></div><div><b>{{"{:,}".format(p.comments).replace(",",".") if p.comments is not none else "N/D"}}</b><span>Comentários</span></div>
 <div><b>{{"{:,}".format(p.reach).replace(",",".") if p.reach is not none else "N/D"}}</b><span>Alcance</span></div><div><b>{{"{:,}".format(p.saved).replace(",",".") if p.saved is not none else "N/D"}}</b><span>Salvos</span></div><div><b>{{"{:,}".format(p.shares).replace(",",".") if p.shares is not none else "N/D"}}</b><span>Envios</span></div></div>
 <div class="postbtn">
 {% if p.permalink %}<a class="btn secondary sm" target="_blank" rel="noopener noreferrer" href="{{p.permalink}}">Abrir post ↗</a>
-{% elif p.status=='scheduled' %}<form method="post" action="/posts/{{p.id}}/cancel"><input type="hidden" name="csrf" value="{{csrf}}"><button type="submit" class="btn secondary sm">Cancelar</button></form>{% else %}<span class="micro muted">{{p.checked_local}}</span>{% endif %}
+{% elif p.status=='scheduled' %}<form method="post" action="/posts/{{p.id}}/cancel"><input type="hidden" name="csrf" value="{{csrf}}"><button type="submit" class="btn secondary sm">Cancelar</button></form>{% endif %}
+{% if p.container_id and p.status in ['processing','needs_review','failed'] %}
+<form method="post" action="/posts/{{p.id}}/check"><input type="hidden" name="csrf" value="{{csrf}}"><button type="submit" class="btn secondary sm" onclick="this.disabled=true;this.textContent='Consultando…';this.form.submit()">Verificar na Meta ↻</button></form>
+{% endif %}
 </div>
 </article>
 {% else %}<div class="empty">Ainda não há posts no painel. Clique em “Sincronizar dados” no perfil para importar as publicações existentes.</div>{% endfor %}
@@ -236,6 +239,34 @@ document.getElementById("batchForm").addEventListener("submit",e=>{
  if(!e.currentTarget.querySelector("input[name=account_ids]:checked")){e.preventDefault();document.getElementById("batchUploadStatus").textContent="Selecione pelo menos uma conta.";return}
  if(!document.getElementById("batchUrls").value.trim()){e.preventDefault();document.getElementById("batchUploadStatus").textContent="Envie os vídeos antes de agendar."}
 });
+async function refreshPostStatuses(){
+ if(document.visibilityState!=="visible"||uploadBusy)return;
+ try{
+  const response=await fetch("/api/posts/status",{credentials:"same-origin",cache:"no-store"});
+  if(!response.ok)return;
+  const data=await response.json();
+  for(const job of (data.jobs||[])){
+   const card=document.querySelector('.post[data-post-id="'+job.id+'"]');
+   if(!card)continue;
+   card.dataset.status=job.status;
+   const pill=card.querySelector(".job-state");
+   if(pill){pill.className="pill job-state "+job.status;pill.textContent=job.label}
+   const detail=card.querySelector(".job-detail");
+   if(detail){
+    detail.textContent=job.error_hint||(job.provider_status?("Meta: "+job.provider_status+" · "+job.provider_checked):"");
+   }
+   if(job.permalink&&job.permalink.startsWith("https://www.instagram.com/")){
+    const tools=card.querySelector(".postbtn");
+    if(tools&&!tools.querySelector('a[data-live-link]')){
+     const a=document.createElement("a");a.className="btn secondary sm";a.textContent="Abrir post ↗";a.href=job.permalink;
+     a.target="_blank";a.rel="noopener noreferrer";a.dataset.liveLink="1";tools.prepend(a);
+    }
+   }
+  }
+  filterPosts();
+ }catch(err){/* A transient connection failure must not clear any post state. */}
+}
+setInterval(refreshPostStatuses,20000);
 </script>
 {% endif %}
 </body></html>
