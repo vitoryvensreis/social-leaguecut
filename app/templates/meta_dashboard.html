@@ -239,6 +239,38 @@ document.getElementById("batchForm").addEventListener("submit",e=>{
  if(!e.currentTarget.querySelector("input[name=account_ids]:checked")){e.preventDefault();document.getElementById("batchUploadStatus").textContent="Selecione pelo menos uma conta.";return}
  if(!document.getElementById("batchUrls").value.trim()){e.preventDefault();document.getElementById("batchUploadStatus").textContent="Envie os vídeos antes de agendar."}
 });
+function refreshPostActions(card,job){
+ const actions=card.querySelector(".postbtn");
+ if(!actions)return;
+ for(const form of Array.from(actions.querySelectorAll("form"))){
+  if(form.action.endsWith("/cancel")&&job.status!=="scheduled")form.remove();
+  if(form.action.endsWith("/check")&&
+     !(job.has_container&&["processing","needs_review","failed"].includes(job.status)))form.remove();
+ }
+ if(job.permalink&&/^https:\/\/(www\.)?instagram\.com\//.test(job.permalink)){
+  let link=actions.querySelector("a[href]");
+  if(!link){
+   link=document.createElement("a");
+   link.className="btn secondary sm";
+   link.textContent="Abrir post ↗";
+   link.target="_blank";link.rel="noopener noreferrer";
+   actions.prepend(link);
+  }
+  link.href=job.permalink;
+ }
+ const hasCheck=Array.from(actions.querySelectorAll("form")).some(f=>f.action.endsWith("/check"));
+ if(job.has_container&&["processing","needs_review","failed"].includes(job.status)&&!hasCheck){
+  const form=document.createElement("form");
+  form.method="post";form.action="/posts/"+job.id+"/check";
+  const csrf=document.createElement("input");
+  csrf.type="hidden";csrf.name="csrf";
+  csrf.value=document.querySelector('#scheduleForm input[name="csrf"]').value;
+  const button=document.createElement("button");
+  button.type="submit";button.className="btn secondary sm";button.textContent="Verificar na Meta ↻";
+  button.addEventListener("click",()=>{button.disabled=true;button.textContent="Consultando…";form.submit()});
+  form.append(csrf,button);actions.append(form);
+ }
+}
 async function refreshPostStatuses(){
  if(document.visibilityState!=="visible"||uploadBusy)return;
  try{
@@ -252,19 +284,12 @@ async function refreshPostStatuses(){
    const pill=card.querySelector(".job-state");
    if(pill){pill.className="pill job-state "+job.status;pill.textContent=job.label}
    const detail=card.querySelector(".job-detail");
-   if(detail){
-    detail.textContent=job.error_hint||(job.provider_status?("Meta: "+job.provider_status+" · "+job.provider_checked):"");
-   }
-   if(job.permalink&&job.permalink.startsWith("https://www.instagram.com/")){
-    const tools=card.querySelector(".postbtn");
-    if(tools&&!tools.querySelector('a[data-live-link]')){
-     const a=document.createElement("a");a.className="btn secondary sm";a.textContent="Abrir post ↗";a.href=job.permalink;
-     a.target="_blank";a.rel="noopener noreferrer";a.dataset.liveLink="1";tools.prepend(a);
-    }
-   }
+   if(detail)detail.textContent=job.error_hint||(job.provider_status?
+      ("Meta: "+job.provider_status+" · "+job.provider_checked):"");
+   refreshPostActions(card,job);
   }
   filterPosts();
- }catch(err){/* A transient connection failure must not clear any post state. */}
+ }catch(err){/* Temporary network errors must not erase the displayed status. */}
 }
 setInterval(refreshPostStatuses,20000);
 </script>
