@@ -70,6 +70,10 @@ def init(db):
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_meta_accounts_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""")
+        c.execute("""CREATE TABLE IF NOT EXISTS meta_submission_keys (
+            request_key VARCHAR(64) NOT NULL PRIMARY KEY,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""")
         c.execute("""CREATE TABLE IF NOT EXISTS meta_posts (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             account_id BIGINT UNSIGNED NOT NULL,
@@ -239,7 +243,8 @@ def home(request: Request):
               "success": request.query_params.get("success", ""),
               "configured": all(os.getenv(k) for k in
                   ("ADMIN_PASSWORD", "SESSION_SECRET", "DB_USER", "DB_PASSWORD", "DB_NAME")),
-              "accounts": [], "posts": [], "top_posts": [], "totals": {}, "now_local":
+              "accounts": [], "posts": [], "top_posts": [], "totals": {},
+              "submit_id": secrets.token_urlsafe(24), "now_local":
                   datetime.now(TZ).strftime("%Y-%m-%dT%H:%M")}
     if authenticated(request):
         try:
@@ -391,26 +396,45 @@ def toggle_account(account_id: int, request: Request, csrf: str = Form(...)):
         db.commit()
     return go("Situação da conta atualizada.")
 
+def publication_times(publish_mode, scheduled_at, interval_minutes, count, current=None):
+    """Calculate UTC job times; immediate publication ignores date and spacing."""
+    now = current if current is not None else now_utc()
+    if publish_mode == "now":
+        return [now] * count
+    if publish_mode != "schedule":
+        raise ValueError("Escolha Agendar publicação ou Publicar Agora.")
+    if not 0 <= interval_minutes <= 180:
+        raise ValueError("O intervalo entre as contas é inválido.")
+    try:
+        local = datetime.strptime(scheduled_at, "%Y-%m-%dT%H:%M").replace(tzinfo=TZ)
+        start = local.astimezone(timezone.utc).replace(tzinfo=None)
+    except (ValueError, TypeError):
+        raise ValueError("Informe uma data e um horário válidos para agendar.") from None
+    if start < now - timedelta(minutes=2):
+        raise ValueError("Selecione um horário atual ou futuro.")
+    return [start + timedelta(minutes=i * interval_minutes) for i in range(count)]
+
+
 @app.post("/schedule")
 def schedule(request: Request, csrf: str = Form(...),
              account_ids: list[int] = Form(...), video_url: str = Form(...),
-             caption: str = Form(""), scheduled_at: str = Form(...),
-             interval_minutes: int = Form(0)):
+             caption: str = Form(""), scheduled_at: str = Form(""),
+             interval_minutes: int = Form(0), publish_mode: str = Form("schedule"),
+             submit_id: str = Form("")):
     require_form(request, csrf)
     account_ids = sorted(set(account_ids))
     if not account_ids or len(account_ids) > 100:
         return go("Selecione de 1 a 100 contas.", True)
     if not validate_media_url(video_url.strip()):
-        return go("Informe URL de vídeo HTTPS pública (ou envie um MP4 primeiro).", True)
-    if not 0 <= interval_minutes <= 180 or len(caption) > 2200:
+        return go("Envie um MP4 ou informe uma URL HTTPS válida.", True)
+    if len(caption) > 2200 or not 0 <= interval_minutes <= 180:
         return go("Legenda ou intervalo inválido.", True)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{25,64}", submit_id):
+        return go("Identificador de envio inválido. Atualize a página e tente novamente.", True)
     try:
-        local = datetime.strptime(scheduled_at, "%Y-%m-%dT%H:%M").replace(tzinfo=TZ)
-        start = local.astimezone(timezone.utc).replace(tzinfo=None)
-    except ValueError:
-        return go("Data ou horário inválido.", True)
-    if start < now_utc() - timedelta(minutes=2):
-        return go("Selecione um horário atual ou futuro.", True)
+        planned_times = publication_times(publish_mode, scheduled_at, interval_minutes, len(account_ids))
+    except ValueError as exc:
+        return go(str(exc), True)
     with db_connection() as db:
         init(db)
         with db.cursor() as c:
@@ -420,14 +444,25 @@ def schedule(request: Request, csrf: str = Form(...),
             active = {int(a["id"]) for a in c.fetchall()}
             if len(active) != len(account_ids):
                 return go("Uma das contas está pausada ou não existe.", True)
-            for idx, account_id in enumerate(account_ids):
-                when = start + timedelta(minutes=idx * interval_minutes)
+            # Enforces exactly one batch per form submission, including a
+            # repeated browser request or double-click with the same nonce.
+            c.execute("INSERT IGNORE INTO meta_submission_keys (request_key) VALUES (%s)",
+                      (submit_id,))
+            if c.rowcount == 0:
+                db.rollback()
+                return go("Esta solicitação já foi recebida. Confira Publicações e Analytics.")
+            for account_id, when in zip(account_ids, planned_times):
                 c.execute("""INSERT INTO meta_posts
                     (account_id,video_url,caption,scheduled_at_utc,status)
                     VALUES (%s,%s,%s,%s,'scheduled')""",
                     (account_id, video_url.strip(), caption, when))
         db.commit()
+    if publish_mode == "now":
+        return go(str(len(account_ids)) +
+                  " publicação(ões) enviada(s) para processamento imediato pela Meta. "
+                  "Acompanhe o status abaixo.")
     return go(str(len(account_ids)) + " publicação(ões) agendada(s) no fuso de Fortaleza.")
+
 
 @app.post("/batch")
 def batch_schedule(request: Request, csrf: str = Form(...),
