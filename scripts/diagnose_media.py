@@ -79,8 +79,10 @@ def main():
         public=PUBLIC_URL+"/media/"+path.name
         local="http://127.0.0.1:8090/media/"+path.name
         print("LOCAL_HEAD",safe_head(local))
-        print("PUBLIC_HEAD",safe_head(public))
-        print("PUBLIC_RANGE",safe_range(public))
+        print("LEGACY_PUBLIC_HEAD",safe_head(public))
+        new_public=PUBLIC_URL+"/ig-video/"+path.stem
+        print("NEW_PUBLIC_HEAD",safe_head(new_public))
+        print("NEW_PUBLIC_RANGE",safe_range(new_public))
 
 if __name__=="__main__":
     main()
