@@ -37,6 +37,31 @@ class MetaPlatformTests(unittest.TestCase):
             with self.assertRaises(meta.GraphError):
                 meta.account_profile("token")
 
+    def test_instagram_media_stream_supports_head_get_and_range(self):
+        from fastapi.testclient import TestClient
+        import tempfile
+        from pathlib import Path
+        opaque_id = "a" * 40
+        with tempfile.TemporaryDirectory() as directory, patch.object(meta,"MEDIA_DIR",Path(directory)):
+            path=Path(directory)/(opaque_id+".mp4")
+            path.write_bytes(b"fake-mp4-sample")
+            client=TestClient(meta.app)
+            head=client.head("/ig-video/"+opaque_id)
+            self.assertEqual(head.status_code,200)
+            self.assertEqual(head.headers["content-type"],"video/mp4")
+            get=client.get("/ig-video/"+opaque_id,headers={"Range":"bytes=0-3"})
+            self.assertEqual(get.status_code,206)
+            self.assertEqual(get.content,b"fake")
+            self.assertEqual(client.get("/ig-video/../secret").status_code,404)
+
+    def test_legacy_media_url_is_remapped_only_for_own_uploads(self):
+        valid="b" * 40
+        original=meta.PUBLIC_URL+"/media/"+valid+".mp4"
+        self.assertEqual(meta.normalize_owned_video_url(original),
+                         meta.PUBLIC_URL+"/ig-video/"+valid)
+        self.assertEqual(meta.normalize_owned_video_url("https://cdn.example.com/file.mp4"),
+                         "https://cdn.example.com/file.mp4")
+
     def test_web_routes_are_meta_only(self):
         route_paths = {r.path for r in meta.app.routes}
         self.assertIn("/accounts", route_paths)
