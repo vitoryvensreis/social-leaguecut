@@ -85,6 +85,23 @@ code{color:#ff93a9;font-size:11px}button:disabled{opacity:.5;cursor:not-allowed}
 <div class="wide actions"><button class="btn" type="submit">Agendar publicações →</button><span class="tiny muted">O sistema publica automaticamente quando chegar a hora, desde que o servidor e a API estejam disponíveis.</span></div>
 </div></form>
 </section>
+<section class="panel" id="batch">
+<div class="panelhead"><h2><span class="sectionno">04</span> Campanha em lote · até 60 dias</h2><span class="tag">1 vídeo por dia / conta</span></div>
+<p class="tiny muted">Cole um link HTTPS por linha, na ordem em que os vídeos serão publicados. O sistema agenda o vídeo da linha 1 para o primeiro dia, o da linha 2 para o segundo dia e assim por diante. Em cada dia, todas as contas selecionadas recebem o mesmo Reel, nos horários escalonados.</p>
+<form method="post" action="/batch" id="batchForm"><input type="hidden" name="csrf" value="{{csrf}}">
+<div class="formgrid">
+<div class="field wide"><span>Contas da campanha</span><div class="accountselect">
+{% for a in accounts %}<label class="{{'disabled' if a.status!='active' else ''}}"><input type="checkbox" name="account_ids" value="{{a.id}}" {{'disabled' if a.status!='active' else ''}}> @{{a.username}}</label>
+{% else %}<span class="tiny muted">Conecte uma conta antes de agendar.</span>{% endfor %}
+</div></div>
+<div class="field wide"><label for="batchUpload">Enviar vários MP4 (opcional)</label><div class="actions"><input type="file" id="batchUpload" accept=".mp4,video/mp4" multiple><button type="button" class="btn secondary" id="batchUploadBtn" onclick="sendBatchVideos()">Enviar vídeos e preencher URLs</button><span class="tiny muted" id="batchUploadStatus">Até 60 arquivos; o envio é sequencial.</span></div></div>
+<div class="field wide"><label for="batchUrls">URLs dos Reels (uma por linha, em ordem de publicação)</label><textarea id="batchUrls" name="video_urls_text" rows="7" placeholder="https://seu-servidor.com/video-01.mp4&#10;https://seu-servidor.com/video-02.mp4" required></textarea></div>
+<div class="field wide"><label for="batchCaption">Legenda padrão para os vídeos da campanha</label><textarea id="batchCaption" name="caption" rows="3" maxlength="2200" placeholder="Legenda, @menção e hashtags..."></textarea></div>
+<div class="field"><label>Data do primeiro dia</label><input type="date" name="first_date" value="{{now_local[:10]}}" required></div>
+<div class="field"><label>Primeira publicação do dia</label><input type="time" name="first_time" value="10:00" required></div>
+<div class="field"><label>Intervalo entre contas (minutos)</label><input type="number" name="interval_minutes" min="0" max="180" value="30" required></div>
+<div class="wide actions"><button type="submit" class="btn">Criar agenda de toda a campanha →</button><span class="tiny muted">Exemplo: 30 vídeos × 16 contas = 480 agendamentos, um por conta por dia, das 10h às 17h30.</span></div>
+</div></form></section>
 <section class="panel" id="analytics">
 <div class="panelhead"><div><h2><span class="sectionno">04</span> Publicações e métricas</h2><p class="muted tiny" style="margin:7px 0 0">Informações consultadas diretamente na Meta. N/D significa que a API ainda não disponibilizou o dado.</p></div><div class="actions"><input id="search" style="border:1px solid var(--edge);border-radius:8px;background:var(--bg);color:#fff;padding:10px 12px" oninput="filterPosts(this.value)" placeholder="Buscar conta ou status"><button onclick="location.reload()" class="btn secondary small">Atualizar ↻</button></div></div>
 <div class="tablewrap"><table id="postTable"><thead><tr><th>Agendado</th><th>Conta</th><th>Status</th><th>Views</th><th>Alcance</th><th>Curtidas</th><th>Comentários</th><th>Salvos</th><th>Compart.</th><th>Última leitura</th><th>Reel / ações</th></tr></thead>
@@ -110,6 +127,25 @@ async function sendVideo(){
  btn.disabled=true;status.textContent="Enviando "+file.name+"...";
  try{var res=await fetch("/upload",{method:"POST",body:form,credentials:"same-origin"});var data=await res.json();if(!res.ok)throw Error(data.detail||"Falha no upload");document.getElementById("videoUrl").value=data.url;status.textContent="Vídeo enviado! URL preenchida e pronta para agendar."}
  catch(e){status.textContent=e.message||"Falha no upload"}
+ finally{btn.disabled=false}
+}
+async function sendBatchVideos(){
+ var files=Array.from(document.getElementById("batchUpload").files);
+ var status=document.getElementById("batchUploadStatus"),btn=document.getElementById("batchUploadBtn");
+ if(!files.length||files.length>60){status.textContent="Escolha entre 1 e 60 MP4.";return}
+ btn.disabled=true;var urls=[];
+ try{
+  for(var i=0;i<files.length;i++){
+   var file=files[i];if(!file.name.toLowerCase().endsWith(".mp4")||file.size>250*1024*1024)throw Error(file.name+" não é um MP4 válido de até 250 MB.");
+   status.textContent="Enviando vídeo "+(i+1)+"/"+files.length+": "+file.name;
+   var body=new FormData();body.append("csrf",document.querySelector("#batchForm input[name=csrf]").value);body.append("video",file);
+   var response=await fetch("/upload",{method:"POST",body:body,credentials:"same-origin"});
+   var result=await response.json();if(!response.ok)throw Error(result.detail||"Falha ao enviar "+file.name);
+   urls.push(result.url);
+  }
+  var field=document.getElementById("batchUrls");field.value=(field.value.trim()?field.value.trim()+"\n":"")+urls.join("\n");
+  status.textContent=urls.length+" vídeo(s) enviados. Links inseridos na agenda.";
+ }catch(e){if(urls.length){var field=document.getElementById("batchUrls");field.value=(field.value.trim()?field.value.trim()+"\n":"")+urls.join("\n")}status.textContent=e.message||"Falha no envio."}
  finally{btn.disabled=false}
 }
 </script>
