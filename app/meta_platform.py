@@ -571,78 +571,121 @@ def set_problem(db, post_id, status, message):
                   (status, str(message)[:240], post_id))
     db.commit()
 
-def publish_cycle(db, limit=20):
+def record_provider_check(db, post_id, details):
+    """Keep the official container state, never access tokens, in diagnostics."""
+    state = str(details.get("status_code") or "UNKNOWN")[:32].upper()
+    detail = str(details.get("status") or "")[:255]
     with db.cursor() as c:
-        c.execute("""SELECT id,account_id,video_url,caption,status,container_id,updated_at
-             FROM meta_posts WHERE
-                (status='scheduled' AND scheduled_at_utc<=UTC_TIMESTAMP())
-                OR (status='processing' AND updated_at<DATE_SUB(UTC_TIMESTAMP(),INTERVAL 15 SECOND))
-                OR (status IN ('creating','publishing')
-                    AND updated_at<DATE_SUB(UTC_TIMESTAMP(),INTERVAL 10 MINUTE))
-             ORDER BY scheduled_at_utc,id LIMIT %s""", (limit,))
+        c.execute("""INSERT INTO meta_publish_checks
+            (post_id,provider_status,provider_detail,checked_at,checks)
+            VALUES (%s,%s,%s,UTC_TIMESTAMP(),1)
+            ON DUPLICATE KEY UPDATE
+            provider_status=VALUES(provider_status),
+            provider_detail=VALUES(provider_detail),
+            checked_at=UTC_TIMESTAMP(),checks=checks+1""",
+            (post_id,state,detail))
+    db.commit()
+    return state
+
+
+def interpret_container_state(db, job, token, ig_id):
+    pid = job["id"]
+    container_id = job["container_id"]
+    if not container_id:
+        set_state(db,pid,"processing","needs_review",
+                  error_hint="Contêiner não registrado. Confira o Instagram antes de tentar novamente.")
+        return
+    details = graph(str(container_id),token,{"fields":"status_code,status"})
+    result = record_provider_check(db,pid,details)
+    if result == "FINISHED":
+        if not set_state(db,pid,"processing","publishing"):
+            return
+        # A lost response after media_publish might indicate successful posting.
+        # Never automatically send this mutation a second time.
+        published = graph(ig_id+"/media_publish",token,
+                          {"creation_id":container_id},"POST")
+        media_id = str(published.get("id") or "")
+        if not media_id:
+            raise GraphError("A Meta não confirmou o identificador da publicação.")
+        set_state(db,pid,"publishing","published",
+                  media_id=media_id,published_at=now_utc(),error_hint=None)
+        try:
+            data = graph(media_id,token,{"fields":"id,permalink"})
+            with db.cursor() as c:
+                c.execute("UPDATE meta_posts SET permalink=%s WHERE id=%s",
+                          (data.get("permalink"),pid))
+            db.commit()
+        except GraphError:
+            LOG.warning("Published post=%s but permalink unavailable",pid)
+    elif result in ("ERROR","EXPIRED"):
+        detail = str(details.get("status") or result)[:145]
+        set_state(db,pid,"processing","failed",
+                  error_hint="Meta não processou o vídeo: "+detail)
+    elif result == "PUBLISHED":
+        set_state(db,pid,"processing","needs_review",
+                  error_hint="A Meta informa PUBLISHED. Confira no Instagram; NÃO republique.")
+    elif job["updated_at"] and job["updated_at"]<now_utc()-timedelta(minutes=5):
+        set_state(db,pid,"processing","needs_review",
+                  error_hint="A Meta não concluiu o processamento após 5 minutos; confira o vídeo antes de tentar novamente.")
+    elif result not in ("IN_PROGRESS","UNKNOWN"):
+        set_state(db,pid,"processing","needs_review",
+                  error_hint="Status desconhecido da Meta: "+result)
+
+
+def publish_cycle(db, limit=20):
+    """Poll the provider once a minute; do not block behind analytics queries."""
+    with db.cursor() as c:
+        c.execute("""SELECT p.id,p.account_id,p.video_url,p.caption,p.status,
+                p.container_id,p.updated_at
+              FROM meta_posts p
+              LEFT JOIN meta_publish_checks chk ON chk.post_id=p.id
+              WHERE (p.status='scheduled' AND p.scheduled_at_utc<=UTC_TIMESTAMP())
+                OR (p.status='processing' AND
+                    (chk.checked_at IS NULL OR
+                     chk.checked_at<DATE_SUB(UTC_TIMESTAMP(),INTERVAL 60 SECOND)))
+                OR (p.status IN ('creating','publishing') AND
+                     p.updated_at<DATE_SUB(UTC_TIMESTAMP(),INTERVAL 10 MINUTE))
+              ORDER BY p.scheduled_at_utc,p.id LIMIT %s""",(limit,))
         jobs = c.fetchall()
     for job in jobs:
-        pid = job["id"]
-        state = job["status"]
-        if state in ("creating", "publishing"):
-            # A network response may have been lost after the external write.
-            # Never automatically repeat an uncertain publish request.
-            set_state(db, pid, state, "needs_review",
-                error_hint="Resultado incerto. Confira o Instagram antes de reagendar.")
+        pid,state = job["id"],job["status"]
+        if state in ("creating","publishing"):
+            set_state(db,pid,state,"needs_review",
+                      error_hint="Resposta incerta da Meta. Confira no Instagram antes de tentar novamente.")
             continue
         try:
-            token, ig_id = get_token(db, job["account_id"])
-            if state == "scheduled":
-                if not set_state(db, pid, "scheduled", "creating"):
+            token,ig_id = get_token(db,job["account_id"])
+            if state=="scheduled":
+                if not set_state(db,pid,"scheduled","creating"):
                     continue
-                created = graph(ig_id + "/media", token, {
-                    "media_type": "REELS", "video_url": job["video_url"],
-                    "caption": job["caption"], "share_to_feed": "true"}, "POST")
+                created = graph(ig_id+"/media",token,{
+                    "media_type":"REELS","video_url":job["video_url"],
+                    "caption":job["caption"],"share_to_feed":"true"},"POST")
                 if not created.get("id"):
-                    raise GraphError("A Meta não informou o identificador do contêiner.")
-                set_state(db, pid, "creating", "processing", container_id=str(created["id"]))
+                    raise GraphError("A Meta não informou o contêiner do vídeo.")
+                set_state(db,pid,"creating","processing",
+                          container_id=str(created["id"]))
             else:
-                details = graph(str(job["container_id"]), token, {"fields": "status_code,status"})
-                result = details.get("status_code", "")
-                if result == "FINISHED":
-                    if not set_state(db, pid, "processing", "publishing"):
-                        continue
-                    published = graph(ig_id + "/media_publish", token,
-                                      {"creation_id": job["container_id"]}, "POST")
-                    media_id = str(published.get("id", ""))
-                    if not media_id:
-                        raise GraphError("A Meta não confirmou o ID do Reel.")
-                    # This DB write is deliberately before the optional permalink read.
-                    set_state(db, pid, "publishing", "published",
-                              media_id=media_id, published_at=now_utc(), error_hint=None)
-                    try:
-                        data = graph(media_id, token, {"fields": "id,permalink"})
-                        with db.cursor() as c:
-                            c.execute("UPDATE meta_posts SET permalink=%s WHERE id=%s",
-                                      (data.get("permalink"), pid))
-                        db.commit()
-                    except GraphError:
-                        LOG.warning("Permalink unavailable for post %s", pid)
-                elif result in ("ERROR", "EXPIRED"):
-                    set_state(db, pid, "processing", "failed",
-                        error_hint="A Meta informou contêiner " + result)
-                elif job["updated_at"] < now_utc() - timedelta(hours=23):
-                    set_state(db, pid, "processing", "failed",
-                        error_hint="O contêiner não ficou pronto dentro de 23 horas.")
-        except (GraphError, RuntimeError) as exc:
-            # No automatic retry: an HTTP timeout after /media_publish could
-            # otherwise create a second Reel.
-            current = "needs_review" if state == "processing" else "failed"
+                interpret_container_state(db,job,token,ig_id)
+        except (GraphError,RuntimeError) as exc:
             with db.cursor() as c:
-                c.execute("SELECT status FROM meta_posts WHERE id=%s", (pid,))
-                current_state = c.fetchone()["status"]
-            if current_state in ("creating", "publishing"):
-                current = "needs_review" if current_state == "publishing" else "failed"
-            set_problem(db, pid, current, exc)
-            LOG.warning("Post %s requires attention: %s", pid, type(exc).__name__)
+                c.execute("SELECT status FROM meta_posts WHERE id=%s",(pid,))
+                current = c.fetchone()
+            status = current["status"] if current else None
+            if status not in ("creating","processing","publishing"):
+                continue
+            next_status = "needs_review" if status in ("processing","publishing") else "failed"
+            set_problem(db,pid,next_status,exc)
+            LOG.warning("Meta publication post=%s: %s",pid,type(exc).__name__)
         except Exception:
-            LOG.exception("Unexpected job failure %s", pid)
-            set_problem(db, pid, "needs_review", "Falha inesperada; revisão manual necessária.")
+            LOG.exception("Unexpected publication error post=%s",pid)
+            with db.cursor() as c:
+                c.execute("SELECT status FROM meta_posts WHERE id=%s",(pid,))
+                current = c.fetchone()
+            if current and current["status"] in ("creating","processing","publishing"):
+                set_problem(db,pid,"needs_review",
+                            "Erro inesperado. Confira no Instagram antes de reagendar.")
+
 
 def extract_metric(payload):
     series = payload.get("data") or []
