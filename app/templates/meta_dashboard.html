@@ -11,7 +11,7 @@
 a{color:inherit;text-decoration:none}a:hover{color:#fff}button,input,textarea,select{font:inherit}button{cursor:pointer}.layout{display:grid;grid-template-columns:226px minmax(0,1fr);min-height:100vh}
 aside{height:100vh;position:sticky;top:0;display:flex;flex-direction:column;background:var(--side);padding:26px 17px;border-right:1px solid var(--line)}
 .brand{display:block;line-height:1.2;font-weight:900;font-size:16px;letter-spacing:-.045em}.brand i{color:var(--red);font-style:normal}.brand small{display:block;color:var(--muted);letter-spacing:.13em;font-size:10px;font-weight:700;margin-top:7px}
-.menu{display:grid;gap:5px;margin-top:40px}.menu a{padding:13px 12px;border-radius:9px;color:#b5b8c7;font-weight:650}.menu a:hover,.menu a:first-child{background:#2a242e;color:#fff}.sidefoot{margin-top:auto;font-size:11px;color:var(--muted);line-height:1.8;padding:15px 6px;border-top:1px solid var(--line)}
+.menu{display:grid;gap:5px;margin-top:40px}.menu a{padding:13px 12px;border-radius:9px;color:#b5b8c7;font-weight:650}.menu a:hover,.menu a.is-active{background:#2a242e;color:#fff}.menu a.is-active{box-shadow:inset 3px 0 0 var(--red)}.sidefoot{margin-top:auto;font-size:11px;color:var(--muted);line-height:1.8;padding:15px 6px;border-top:1px solid var(--line)}
 main{max-width:1540px;margin:auto;padding:34px clamp(16px,3.2vw,54px) 70px;width:100%;min-width:0}
 .top{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;margin-bottom:21px}.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.13em;font-weight:800;color:#f7798e}
 h1{font-size:clamp(27px,3.2vw,41px);line-height:1.13;letter-spacing:-.06em;margin:8px 0}h2{font-size:20px;margin:0;letter-spacing:-.045em}h3{margin:0;font-size:15px;letter-spacing:-.02em}p{line-height:1.5}.muted{color:var(--muted)}.small{font-size:12px}.micro{font-size:11px}.header-actions{display:flex;gap:10px;align-items:center}
@@ -58,7 +58,7 @@ details{border:1px solid #373b49;border-radius:10px;padding:12px 14px;background
 .composer-preview-media .video-preview{max-height:240px;width:100%;height:100%;max-width:none;margin:0;object-fit:contain;border-radius:0;background:#000}
 .composer-preview-bottom{padding:12px;min-height:87px}
 .composer-preview-bottom strong{font-size:11px;color:#f7f9fc;display:block}
-.composer-preview-bottom p{font-size:10px;color:#c4c5d0;max-height:45px;overflow:hidden;overflow-wrap:anywhere;line-height:1.5}
+.composer-preview-bottom p{font-size:10px;color:#c4c5d0;max-height:45px;overflow:hidden;overflow-wrap:anywhere;white-space:pre-line;line-height:1.5}
 .composer-footer{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;background:#1f2330;border:1px solid #373d4b;border-radius:11px;margin-top:16px;padding:16px 18px}
 .composer-footer-title{font-size:14px;font-weight:850;margin-bottom:6px}
 .composer-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
@@ -349,6 +349,13 @@ function updateComposerPreview(){
 document.getElementById("caption").addEventListener("input",updateComposerPreview);
 document.querySelectorAll('#scheduleForm input[name="account_ids"]').forEach(c=>c.addEventListener("change",updateComposerPreview));
 updateComposerPreview();
+function markActiveSection(){
+ const hash=(location.hash||"#inicio");
+ const nav=document.querySelectorAll("aside .menu a[href^='#']");
+ nav.forEach(a=>{const match=a.getAttribute("href")===hash;a.classList.toggle("is-active",match);if(match)a.setAttribute("aria-current","location");else a.removeAttribute("aria-current")});
+}
+window.addEventListener("hashchange",markActiveSection);
+markActiveSection();
 </script>
 {% endif %}
 </body></html>
