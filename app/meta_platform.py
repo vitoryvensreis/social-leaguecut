@@ -603,7 +603,7 @@ async def upload(request: Request, csrf: str = Form(...), video: UploadFile = Fi
     return JSONResponse({"url": PUBLIC_URL + "/media/" + name, "bytes": total},
         headers={"Cache-Control": "no-store"})
 
-@app.get("/media/{name}")
+@app.api_route("/media/{name}", methods=["GET", "HEAD"])
 def media(name: str):
     if not re.fullmatch(r"[0-9a-f]{40}\.mp4", name):
         raise HTTPException(status_code=404)
