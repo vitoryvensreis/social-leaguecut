@@ -1,0 +1,233 @@
+<style>
+/* Social LeagueCut editorial planner – bespoke dark design. */
+#calendario{scroll-margin-top:24px;background:linear-gradient(152deg,#1c1d27 0%,#151821 60%);border-color:#343443}
+.studio-cal-head{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:17px}
+.studio-cal-head h2{font-size:22px;margin:5px 0;letter-spacing:-.055em}
+.studio-cal-head p{margin:0;color:var(--muted);font-size:12px}
+.studio-cal-eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:800;color:#ff829c}
+.studio-cal-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#11141e;border:1px solid #333746;border-radius:12px;padding:12px;margin-bottom:14px}
+.studio-cal-controls select{color:#f0f2f8;background:#252936;border:1px solid #414657;border-radius:8px;padding:9px 10px;max-width:220px;min-height:38px}
+.studio-cal-month{min-width:154px;text-align:center;font-size:16px;font-weight:850;letter-spacing:-.04em}
+.studio-cal-nav{display:flex;align-items:center;gap:5px}
+.studio-cal-nav button,.studio-cal-view button,.studio-cal-today{border:1px solid #3c4150;background:#262a36;color:#eef0f5;padding:9px 12px;border-radius:8px;font-size:12px;font-weight:750;cursor:pointer}
+.studio-cal-nav button:hover,.studio-cal-view button:hover,.studio-cal-today:hover{border-color:#f36881}
+.studio-cal-view{margin-left:auto;display:flex;gap:4px}
+.studio-cal-view button[aria-pressed=true]{background:#4b2637;color:#ffc1ce;border-color:#be5771}
+.studio-cal-legend{display:flex;gap:13px;align-items:center;flex-wrap:wrap;margin-bottom:14px;font-size:11px;color:#aeb5c5}
+.studio-cal-legend span{display:inline-flex;align-items:center;gap:5px}
+.studio-cal-dot{height:8px;width:8px;border-radius:50%;display:inline-block;background:#747d8e}
+.studio-cal-dot.planned{background:#f0ad6b}.studio-cal-dot.posted{background:#4ad7a3}.studio-cal-dot.error{background:#ff6677}.studio-cal-dot.waiting{background:#8e9df7}
+.studio-cal-counts{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:16px}
+.studio-cal-count{font-size:11px;color:#b4b9c6;border:1px solid #373b49;background:#21242f;border-radius:8px;padding:8px 11px}
+.studio-cal-count b{color:#fff;margin-right:4px;font-size:13px}
+.studio-cal-scroll{max-width:100%;overflow-x:auto;border-radius:11px;border:1px solid #363a47;background:#141720}
+.studio-cal-weekdays,.studio-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));min-width:735px}
+.studio-cal-weekdays{background:#202430;border-bottom:1px solid #363b4a}
+.studio-cal-weekdays span{font-size:11px;padding:12px 7px;text-align:center;color:#a9afbd;font-weight:800;letter-spacing:.03em}
+.studio-cal-grid{gap:1px;background:#2d3140}
+.studio-cal-day{min-height:128px;background:#181b25;padding:8px;min-width:0;display:flex;flex-direction:column;gap:7px;transition:background .12s}
+.studio-cal-day:hover{background:#202431}
+.studio-cal-day.other{background:#151720}
+.studio-cal-day.today{box-shadow:inset 0 0 0 2px #fa5271}
+.studio-cal-day-top{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.studio-cal-date{font-size:12px;font-weight:850;color:#f5f6fa}
+.studio-cal-day.other .studio-cal-date{color:#697081}
+.studio-cal-day-action{font-size:15px;color:#e6a4b2;border:none;background:transparent;padding:1px 7px;border-radius:5px;cursor:pointer}
+.studio-cal-day-action:hover{background:#492b39;color:#fff}
+.studio-cal-items{display:grid;gap:5px;align-content:start}
+.studio-cal-event{display:flex;align-items:center;gap:6px;padding:7px;border:1px solid #495367;background:#293242;border-left:3px solid #8c9ef2;border-radius:6px;color:#eaf0ff;font-size:10px;text-align:left;min-width:0;width:100%;cursor:pointer}
+.studio-cal-event .studio-cal-dot{flex:0 0 7px;width:7px;height:7px}
+.studio-cal-event strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.studio-cal-event.planned{background:#33281f;border-color:#645037;border-left-color:#f2ac6d}
+.studio-cal-event.posted{background:#19332d;border-color:#305d50;border-left-color:#4ad7a3}
+.studio-cal-event.error{background:#3b252d;border-color:#744452;border-left-color:#ff6e81}
+.studio-cal-event.waiting{background:#282a41;border-color:#444f74;border-left-color:#9ea8ef}
+.studio-cal-event:hover{filter:brightness(1.16)}
+.studio-cal-more{font-size:10px;font-weight:700;color:#c7bacc;display:block;text-align:left;padding:2px 5px}
+.studio-cal-list{display:grid;gap:8px}
+.studio-cal-listdate{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#e2b2bd;font-weight:800;margin-top:10px;padding-bottom:6px;border-bottom:1px solid #353b47}
+.studio-cal-listitem{display:flex;align-items:center;gap:10px;width:100%;border:1px solid #393e4c;background:#202431;color:#e9eaf1;text-align:left;padding:11px 12px;border-radius:9px;cursor:pointer}
+.studio-cal-listitem:hover{border-color:#b2516a;background:#2a2b36}
+.studio-cal-listitem strong{flex:1;min-width:0;text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
+.studio-cal-listitem small{color:#a9aebb}
+.studio-cal-empty{text-align:center;color:var(--muted);font-size:12px;padding:28px 12px}
+.studio-cal-error{color:#ffc4cd;background:#3e202b;border:1px solid #714456;padding:11px;border-radius:8px;margin:12px 0;font-size:12px}
+#studioCalDialog{max-width:460px;width:calc(100% - 32px);border:1px solid #484455;border-radius:16px;background:#1b1d27;color:#fff;box-shadow:0 25px 100px #000a;padding:26px}
+#studioCalDialog::backdrop{background:#05060bb8}
+.studio-cal-modal-head{display:flex;justify-content:space-between;gap:12px;align-items:start}
+.studio-cal-modal-head h3{font-size:20px}
+.studio-cal-modal-close{background:#302f3c;color:white;border:1px solid #4b4758;border-radius:8px;padding:5px 11px;font-size:20px;cursor:pointer}
+.studio-cal-detail{margin-top:14px;display:grid;gap:11px;font-size:12px;color:#c9cad4}
+.studio-cal-detail strong{color:#fff}
+@media(max-width:760px){.studio-cal-head h2{font-size:19px}.studio-cal-controls{gap:8px}.studio-cal-view{margin-left:0}.studio-cal-count{flex:1;text-align:center}.studio-cal-scroll{border-color:#3a3f4b}.studio-cal-day{min-height:116px}}
+</style>
+<section class="panel" id="calendario" aria-labelledby="studioCalHeading">
+<div class="studio-cal-head"><div><div class="studio-cal-eyebrow">Planejamento / Social LeagueCut</div><h2 id="studioCalHeading">Calendário editorial</h2><p>Acompanhe o que está agendado, o que já foi publicado e o que precisa de atenção.</p></div><a class="btn sm" href="#publicar">＋ Criar publicação</a></div>
+<div class="studio-cal-controls">
+<div class="studio-cal-nav"><button type="button" id="studioCalPrev" aria-label="Mês anterior">←</button><strong id="studioCalMonth" class="studio-cal-month">Calendário</strong><button type="button" id="studioCalNext" aria-label="Próximo mês">→</button></div>
+<button type="button" class="studio-cal-today" id="studioCalToday">Hoje</button>
+<label class="small muted" for="studioCalAccount">Conta</label>
+<select id="studioCalAccount"><option value="">Todas as contas</option>{% for a in accounts %}<option value="{{a.id}}">@{{a.username}}</option>{% endfor %}</select>
+<label class="small muted" for="studioCalStatus">Mostrar</label>
+<select id="studioCalStatus"><option value="all">Todos</option><option value="planned">Agendados</option><option value="posted">Publicados</option><option value="error">Com problemas</option></select>
+<div class="studio-cal-view"><button type="button" data-cal-view="month" aria-pressed="true">Mês</button><button type="button" data-cal-view="list" aria-pressed="false">Lista</button></div>
+</div>
+<div class="studio-cal-counts" id="studioCalSummary" aria-live="polite">
+<span class="studio-cal-count"><b>—</b> Carregando publicações</span>
+</div>
+<div class="studio-cal-legend"><span><i class="studio-cal-dot planned"></i> Agendado</span><span><i class="studio-cal-dot posted"></i> Publicado</span><span><i class="studio-cal-dot waiting"></i> Em processamento</span><span><i class="studio-cal-dot error"></i> Falhou / revisar</span><span>Horário de Fortaleza (UTC−3)</span></div>
+<div id="studioCalAlert" class="studio-cal-error" hidden role="alert"></div>
+<div id="studioCalMonthView" class="studio-cal-scroll"><div class="studio-cal-weekdays"><span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SÁB</span><span>DOM</span></div><div id="studioCalGrid" class="studio-cal-grid" aria-live="polite"></div></div>
+<div id="studioCalListView" class="studio-cal-list" hidden></div>
+<div class="micro muted" style="margin-top:12px">Clique em uma publicação para conferir os detalhes ou use + em um dia futuro para preencher a data do novo Reel.</div>
+</section>
+<dialog id="studioCalDialog" aria-labelledby="studioCalModalTitle">
+<div class="studio-cal-modal-head"><div><div class="studio-cal-eyebrow">Detalhes da publicação</div><h3 id="studioCalModalTitle">Reel</h3></div><button type="button" class="studio-cal-modal-close" id="studioCalClose" aria-label="Fechar">×</button></div>
+<div class="studio-cal-detail" id="studioCalDetails"></div>
+<div class="options"><a id="studioCalInstagramLink" class="btn sm secondary" target="_blank" rel="noopener noreferrer" hidden>Abrir no Instagram ↗</a><a href="#posts" class="btn sm flat" id="studioCalGoPosts">Ver no histórico</a></div>
+</dialog>
+<script>
+(function(){
+ "use strict";
+ const root=document.getElementById("calendario");
+ if(!root)return;
+ const grid=document.getElementById("studioCalGrid"),list=document.getElementById("studioCalListView"),
+  monthView=document.getElementById("studioCalMonthView"),label=document.getElementById("studioCalMonth"),
+  accountSelect=document.getElementById("studioCalAccount"),statusSelect=document.getElementById("studioCalStatus"),
+  summary=document.getElementById("studioCalSummary"),alertBox=document.getElementById("studioCalAlert"),
+  dialog=document.getElementById("studioCalDialog");
+ const today=root.dataset.today||"{{now_local[:10]}}";
+ let month=root.dataset.month||"{{now_local[:7]}}",mode="month",events=[],aborter=null,loadSerial=0;
+ const stateNames={scheduled:"Agendado",imported:"Publicado",published:"Publicado",
+   failed:"Falhou",needs_review:"Precisa revisar",creating:"Preparando",processing:"Processando",
+   publishing:"Publicando",cancelled:"Cancelado"};
+ function cat(s){if(["published","imported"].includes(s))return "posted";if(["failed","needs_review"].includes(s))return "error";if(s==="scheduled")return "planned";return "waiting";}
+ function two(v){return String(v).padStart(2,"0")}
+ function iso(d){return d.getUTCFullYear()+"-"+two(d.getUTCMonth()+1)+"-"+two(d.getUTCDate())}
+ function dayDate(y,m,d){return new Date(Date.UTC(y,m,d))}
+ function setMonth(offset){const parts=month.split("-").map(Number),d=dayDate(parts[0],parts[1]-1+offset,1);month=iso(d).slice(0,7);loadCalendar()}
+ function monthLabel(m){const parts=m.split("-").map(Number);return new Intl.DateTimeFormat("pt-BR",{timeZone:"UTC",month:"long",year:"numeric"}).format(dayDate(parts[0],parts[1]-1,1))}
+ function itemCaption(item){return (item.caption||"Publicação sem legenda").trim()||"Publicação sem legenda"}
+ function node(tag,className,content){const el=document.createElement(tag);if(className)el.className=className;if(content!==undefined)el.textContent=content;return el}
+ function appendCount(number,title){const n=node("span","studio-cal-count");n.append(node("b","",String(number))," "+title);summary.append(n)}
+ function visibleEvents(){const chosen=statusSelect.value;return events.filter(e=>chosen==="all"||cat(e.status)===chosen)}
+ function renderSummary(){
+  summary.replaceChildren();
+  const current=events.filter(e=>e.day.slice(0,7)===month);
+  appendCount(current.length,"no mês");
+  appendCount(current.filter(e=>cat(e.status)==="planned").length,"agendados");
+  appendCount(current.filter(e=>cat(e.status)==="posted").length,"publicados");
+  appendCount(current.filter(e=>cat(e.status)==="error").length,"para revisar");
+ }
+ function scheduleFromDay(day){
+  const input=document.getElementById("scheduled");if(!input)return;
+  const cur="{{now_local}}";
+  const minutesAhead=new Date(Date.parse(cur+":00Z")+15*60000).toISOString().slice(0,16);
+  input.value=day===today?minutesAhead:day+"T10:00";
+  location.hash="publicar";input.focus({preventScroll:true});
+ }
+ function openEvent(e){
+  document.getElementById("studioCalModalTitle").textContent="@"+e.username+" · "+(stateNames[e.status]||e.label);
+  const detail=document.getElementById("studioCalDetails");detail.replaceChildren();
+  const rows=[["Data e horário",e.day.split("-").reverse().join("/")+" às "+e.time],
+   ["Conta","@"+e.username],["Status",stateNames[e.status]||e.label],
+   ["Legenda",itemCaption(e)]];
+  if(e.error)rows.push(["Informação da Meta",e.error]);
+  for(const [heading,value]of rows){const row=node("div","");const strong=node("strong","",heading+": ");row.append(strong,document.createTextNode(value));detail.append(row)}
+  const link=document.getElementById("studioCalInstagramLink");
+  link.hidden=!e.permalink;
+  if(e.permalink)link.href=e.permalink;else link.removeAttribute("href");
+  if(typeof dialog.showModal==="function")dialog.showModal();
+ }
+ function renderMonth(filtered){
+  const [y,m]=month.split("-").map(Number),first=dayDate(y,m-1,1),last=dayDate(y,m,0);
+  const leading=(first.getUTCDay()+6)%7,daysInMonth=last.getUTCDate();
+  const cellCount=Math.ceil((leading+daysInMonth)/7)*7;
+  const lookup=new Map();
+  for(const e of filtered){const items=lookup.get(e.day)||[];items.push(e);lookup.set(e.day,items)}
+  grid.replaceChildren();
+  for(let i=0;i<cellCount;i++){
+   const d=dayDate(y,m-1,i-leading+1),day=iso(d),outside=day.slice(0,7)!==month;
+   const cell=node("div","studio-cal-day"+(outside?" other":"")+(day===today?" today":""));
+   const top=node("div","studio-cal-day-top"),date=node("span","studio-cal-date",String(d.getUTCDate()));
+   top.append(date);
+   if(day>=today){
+    const plus=node("button","studio-cal-day-action","+");
+    plus.type="button";plus.title="Agendar publicação em "+day;plus.setAttribute("aria-label","Criar publicação para "+day);
+    plus.addEventListener("click",()=>scheduleFromDay(day));top.append(plus);
+   }
+   cell.append(top);
+   const items=node("div","studio-cal-items"),matches=lookup.get(day)||[];
+   for(const e of matches.slice(0,3)){
+    const b=node("button","studio-cal-event "+cat(e.status));
+    b.type="button";b.title=e.time+" @"+e.username+" · "+(stateNames[e.status]||e.status);
+    const dot=node("i","studio-cal-dot "+cat(e.status));
+    b.append(dot,node("strong","",e.time+" @"+e.username));
+    b.addEventListener("click",()=>openEvent(e));items.append(b);
+   }
+   if(matches.length>3){
+    const more=node("span","studio-cal-more","+"+(matches.length-3)+" publicações");
+    items.append(more);
+   }
+   cell.append(items);grid.append(cell);
+  }
+ }
+ function renderList(filtered){
+  list.replaceChildren();
+  const sorted=filtered.filter(e=>e.day.slice(0,7)===month).sort((a,b)=>a.local_datetime.localeCompare(b.local_datetime));
+  if(!sorted.length){list.append(node("p","studio-cal-empty","Nenhuma publicação neste período com os filtros escolhidos."));return}
+  let lastDate="";
+  for(const e of sorted){
+   if(e.day!==lastDate){lastDate=e.day;list.append(node("div","studio-cal-listdate",e.day.split("-").reverse().join("/")))}
+   const b=node("button","studio-cal-listitem");b.type="button";
+   b.append(node("i","studio-cal-dot "+cat(e.status)),
+            node("small","",e.time),node("strong","",itemCaption(e).slice(0,65)),
+            node("small","","@"+e.username),
+            node("small","",stateNames[e.status]||e.status));
+   b.addEventListener("click",()=>openEvent(e));list.append(b);
+  }
+ }
+ function render(){
+  label.textContent=monthLabel(month);
+  renderSummary();
+  const filtered=visibleEvents();
+  if(mode==="month")renderMonth(filtered);else renderList(filtered);
+  monthView.hidden=mode!=="month";list.hidden=mode!=="list";
+ }
+ async function loadCalendar(){
+  const serial=++loadSerial;
+  if(aborter)aborter.abort();
+  aborter=new AbortController();
+  alertBox.hidden=true;
+  label.textContent=monthLabel(month);
+  const params=new URLSearchParams({month:month});
+  if(accountSelect.value)params.set("account_id",accountSelect.value);
+  try{
+   const res=await fetch("/api/calendar?"+params.toString(),{credentials:"same-origin",cache:"no-store",signal:aborter.signal});
+   if(!res.ok)throw Error("Não foi possível consultar o calendário ("+res.status+").");
+   const data=await res.json();
+   if(serial!==loadSerial)return;
+   events=Array.isArray(data.events)?data.events:[];
+   if(data.truncated){alertBox.hidden=false;alertBox.textContent="Muitos posts neste período. Exibindo as primeiras 2.500 publicações; filtre por conta."}
+   render();
+  }catch(err){
+   if(err.name==="AbortError"||serial!==loadSerial)return;
+   events=[];render();alertBox.hidden=false;alertBox.textContent=err.message+". Recarregue a página para tentar novamente.";
+  }
+ }
+ document.getElementById("studioCalPrev").addEventListener("click",()=>setMonth(-1));
+ document.getElementById("studioCalNext").addEventListener("click",()=>setMonth(1));
+ document.getElementById("studioCalToday").addEventListener("click",()=>{month=today.slice(0,7);loadCalendar()});
+ accountSelect.addEventListener("change",loadCalendar);
+ statusSelect.addEventListener("change",render);
+ document.querySelectorAll("[data-cal-view]").forEach(b=>b.addEventListener("click",()=>{
+  mode=b.dataset.calView;
+  document.querySelectorAll("[data-cal-view]").forEach(other=>other.setAttribute("aria-pressed",String(other===b)));
+  render();
+ }));
+ document.getElementById("studioCalClose").addEventListener("click",()=>dialog.close());
+ document.getElementById("studioCalGoPosts").addEventListener("click",()=>dialog.close());
+ setInterval(()=>{if(document.visibilityState==="visible")loadCalendar()},120000);
+ loadCalendar();
+})();
+</script>
