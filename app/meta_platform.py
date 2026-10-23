@@ -360,6 +360,64 @@ def schedule(request: Request, csrf: str = Form(...),
         db.commit()
     return go(str(len(account_ids)) + " publicação(ões) agendada(s) no fuso de Fortaleza.")
 
+@app.post("/batch")
+def batch_schedule(request: Request, csrf: str = Form(...),
+                   account_ids: list[int] = Form(...),
+                   video_urls_text: str = Form(...),
+                   caption: str = Form(""), first_date: str = Form(...),
+                   first_time: str = Form("10:00"), interval_minutes: int = Form(30)):
+    """Schedule one Reel per day per selected account; stagger accounts."""
+    require_form(request, csrf)
+    account_ids = sorted(set(account_ids))
+    urls = [s.strip() for s in video_urls_text.splitlines() if s.strip()]
+    if not 1 <= len(urls) <= 60 or not 1 <= len(account_ids) <= 100:
+        return go("Use 1–60 URLs de vídeos e selecione as contas.", True)
+    if any(not validate_media_url(url) for url in urls):
+        return go("Cada linha deve conter uma URL HTTPS pública válida.", True)
+    if len(caption) > 2200 or not 0 <= interval_minutes <= 180:
+        return go("Legenda ou intervalo inválido.", True)
+    try:
+        day = datetime.strptime(first_date, "%Y-%m-%d").date()
+        hour = datetime.strptime(first_time, "%H:%M").time()
+    except ValueError:
+        return go("Data ou horário inválido.", True)
+    last_slot = datetime.combine(day, hour) + timedelta(minutes=(len(account_ids)-1)*interval_minutes)
+    if hour.hour < 10 or last_slot.hour >= 19:
+        return go("Escolha horários dentro da janela 10:00–19:00 de Fortaleza.", True)
+    inserted = skipped = 0
+    with db_connection() as db:
+        init(db)
+        with db.cursor() as c:
+            placeholders = ",".join(["%s"] * len(account_ids))
+            c.execute("SELECT id FROM meta_accounts WHERE status='active' AND id IN (" +
+                      placeholders + ")", account_ids)
+            if len(c.fetchall()) != len(account_ids):
+                return go("Há contas pausadas ou inexistentes na seleção.", True)
+            for day_idx, url in enumerate(urls):
+                local_start = datetime.combine(day + timedelta(days=day_idx), hour).replace(tzinfo=TZ)
+                for idx, account_id in enumerate(account_ids):
+                    planned = (local_start + timedelta(minutes=idx * interval_minutes))
+                    when = planned.astimezone(timezone.utc).replace(tzinfo=None)
+                    if when < now_utc():
+                        skipped += 1
+                        continue
+                    # Idempotent from the operator perspective: do not book a
+                    # second Reel in an occupied slot for this account.
+                    c.execute("""SELECT id FROM meta_posts
+                        WHERE account_id=%s AND scheduled_at_utc=%s
+                          AND status<>'cancelled' LIMIT 1""", (account_id, when))
+                    if c.fetchone():
+                        skipped += 1
+                        continue
+                    c.execute("""INSERT INTO meta_posts
+                        (account_id,video_url,caption,scheduled_at_utc,status)
+                        VALUES (%s,%s,%s,%s,'scheduled')""",
+                        (account_id, url, caption, when))
+                    inserted += 1
+        db.commit()
+    return go(str(inserted) + " Reels agendados; " + str(skipped) +
+              " horários anteriores ou já ocupados foram ignorados.")
+
 @app.post("/posts/{post_id}/cancel")
 def cancel(post_id: int, request: Request, csrf: str = Form(...)):
     require_form(request, csrf)
