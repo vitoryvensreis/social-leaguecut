@@ -95,6 +95,15 @@ def init(db):
             saved BIGINT NULL, shares BIGINT NULL,
             checked_at DATETIME NOT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""")
+        c.execute("""CREATE TABLE IF NOT EXISTS meta_metric_history (
+            post_id BIGINT UNSIGNED NOT NULL,
+            capture_day DATE NOT NULL,
+            views BIGINT NULL, reach BIGINT NULL,
+            likes BIGINT NULL, comments BIGINT NULL,
+            saved BIGINT NULL, shares BIGINT NULL,
+            checked_at DATETIME NOT NULL,
+            PRIMARY KEY (post_id,capture_day)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""")
     db.commit()
     init_extra(db)
 
@@ -223,7 +232,7 @@ def home(request: Request):
               "success": request.query_params.get("success", ""),
               "configured": all(os.getenv(k) for k in
                   ("ADMIN_PASSWORD", "SESSION_SECRET", "DB_USER", "DB_PASSWORD", "DB_NAME")),
-              "accounts": [], "posts": [], "totals": {}, "now_local":
+              "accounts": [], "posts": [], "top_posts": [], "totals": {}, "now_local":
                   datetime.now(TZ).strftime("%Y-%m-%dT%H:%M")}
     if authenticated(request):
         try:
@@ -269,6 +278,14 @@ def home(request: Request):
                         FROM meta_metrics m
                         JOIN meta_posts p ON p.id=m.post_id WHERE p.status IN ('published','imported')""")
                     values["totals"].update(c.fetchone())
+                    c.execute("""SELECT p.id,p.caption,p.permalink,a.username,m.views
+                        FROM meta_posts p
+                        JOIN meta_accounts a ON a.id=p.account_id
+                        JOIN meta_metrics m ON m.post_id=p.id
+                        WHERE p.status IN ('published','imported') AND m.views IS NOT NULL
+                        ORDER BY m.views DESC,p.id DESC LIMIT 5""")
+                    values["top_posts"] = c.fetchall()
+            values["top_max"] = max([int(p["views"]) for p in values["top_posts"]] + [1])
             for a in values["accounts"]:
                 a["synced_local"] = fmt_local(a.get("synced_at"))
                 a["token_saved_local"] = fmt_local(a.get("token_saved_at"))
@@ -657,6 +674,19 @@ def metrics_cycle(db, limit=12):
                 c.execute("""INSERT INTO meta_metrics
                     (post_id,views,reach,likes,comments,saved,shares,checked_at)
                     VALUES (%s,%s,%s,%s,%s,%s,%s,UTC_TIMESTAMP())
+                    ON DUPLICATE KEY UPDATE
+                    views=COALESCE(VALUES(views),views),
+                    reach=COALESCE(VALUES(reach),reach),
+                    likes=COALESCE(VALUES(likes),likes),
+                    comments=COALESCE(VALUES(comments),comments),
+                    saved=COALESCE(VALUES(saved),saved),
+                    shares=COALESCE(VALUES(shares),shares),
+                    checked_at=UTC_TIMESTAMP()""",
+                    (item["id"], numbers["views"], numbers["reach"],
+                     numbers["likes"], numbers["comments"], numbers["saved"], numbers["shares"]))
+                c.execute("""INSERT INTO meta_metric_history
+                    (post_id,capture_day,views,reach,likes,comments,saved,shares,checked_at)
+                    VALUES (%s,UTC_DATE(),%s,%s,%s,%s,%s,%s,UTC_TIMESTAMP())
                     ON DUPLICATE KEY UPDATE
                     views=COALESCE(VALUES(views),views),
                     reach=COALESCE(VALUES(reach),reach),
