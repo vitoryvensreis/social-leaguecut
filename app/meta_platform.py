@@ -320,8 +320,17 @@ def save_account(request: Request, csrf: str = Form(...), token: str = Form(...)
                     username=VALUES(username), token_encrypted=VALUES(token_encrypted),
                     token_saved_at=UTC_TIMESTAMP(),status='active',error_hint=NULL""",
                     (scoped_id, user_id, username, encrypted))
+                c.execute("SELECT id FROM meta_accounts WHERE ig_scoped_id=%s", (scoped_id,))
+                account_id = c.fetchone()["id"]
             db.commit()
-        return go("Conta @" + username + " validada e token armazenado com criptografia.")
+            try:
+                outcome = sync_account(db, account_id, graph, get_token, max_pages=1)
+                return go("Conta @" + username + " conectada. " +
+                          str(outcome["imported"]) + " publicações importadas; consulte o painel.")
+            except Exception:
+                LOG.warning("New token saved but initial profile sync unavailable account=%s", account_id)
+                return go("Conta @" + username +
+                          " conectada. Clique em 'Sincronizar dados' para importar posts e métricas.")
     except (GraphError, RuntimeError, pymysql.MySQLError) as exc:
         return go("Não foi possível cadastrar: " + str(exc)[:190], True)
 
