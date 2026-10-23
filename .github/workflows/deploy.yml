@@ -104,5 +104,7 @@ jobs:
             echo "Health check failed after service restart" >&2
             exit 1
           fi
+          echo "Public media diagnostics (safe metadata only):"
+          .venv/bin/python -m scripts.diagnose_media || echo "Media diagnostic skipped; deploy remains healthy."
           echo "Deployment finished and health check passed."
           REMOTE
