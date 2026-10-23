@@ -277,6 +277,7 @@ def home(request: Request):
                         LEFT JOIN meta_metrics m ON m.post_id=p.id
                         LEFT JOIN meta_media_details d ON d.media_id=p.media_id
                         LEFT JOIN meta_publish_checks chk ON chk.post_id=p.id
+                        WHERE p.status <> 'dismissed'
                         ORDER BY p.scheduled_at_utc DESC LIMIT 200""")
                     values["posts"] = c.fetchall()
                     c.execute("""SELECT
@@ -285,7 +286,7 @@ def home(request: Request):
                         SUM(status='scheduled') scheduled,
                         SUM(status IN ('failed','needs_review')) attention,
                         SUM(status='imported') imported
-                        FROM meta_posts""")
+                        FROM meta_posts WHERE status <> 'dismissed'""")
                     values["totals"] = c.fetchone()
                     c.execute("""SELECT COALESCE(SUM(m.views),0) views,
                         COALESCE(SUM(m.likes),0) likes,
@@ -545,6 +546,7 @@ def api_post_status(request: Request):
                        chk.provider_detail,chk.checked_at
                 FROM meta_posts p
                 LEFT JOIN meta_publish_checks chk ON chk.post_id=p.id
+                WHERE p.status <> 'dismissed'
                 ORDER BY p.scheduled_at_utc DESC LIMIT 200""")
             rows=c.fetchall()
     result=[]
