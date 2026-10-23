@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo
 import pymysql
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
+from app.meta_discovery import init_extra, sync_account
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -95,6 +96,7 @@ def init(db):
             checked_at DATETIME NOT NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""")
     db.commit()
+    init_extra(db)
 
 def encryption():
     key = os.getenv("META_TOKEN_KEY", "")
@@ -230,33 +232,46 @@ def home(request: Request):
                 with db.cursor() as c:
                     c.execute("""SELECT a.id,a.username,a.ig_scoped_id,a.instagram_user_id,
                             a.status,a.error_hint,a.token_saved_at,
+                            pr.name,pr.biography,pr.website,pr.account_type,pr.avatar_url,
+                            pr.followers_count,pr.follows_count,pr.media_count,
+                            pr.yesterday_views,pr.yesterday_reach,pr.yesterday_profile_visits,
+                            pr.yesterday_accounts_engaged,pr.insights_day,pr.insights_error,
+                            pr.media_error,pr.synced_at,pr.imported_count,
                             (SELECT COUNT(*) FROM meta_posts p WHERE p.account_id=a.id) jobs,
                             (SELECT COUNT(*) FROM meta_posts p WHERE p.account_id=a.id
-                              AND p.status='published') published
-                        FROM meta_accounts a ORDER BY a.username""")
+                               AND p.status IN ('published','imported')) published
+                        FROM meta_accounts a
+                        LEFT JOIN meta_account_profiles pr ON pr.account_id=a.id
+                        ORDER BY a.username""")
                     values["accounts"] = c.fetchall()
                     c.execute("""SELECT p.id,p.caption,p.scheduled_at_utc,p.status,
                             p.container_id,p.media_id,p.permalink,p.error_hint,
                             p.video_url,p.published_at,a.username,
-                            m.views,m.reach,m.likes,m.comments,m.saved,m.shares,m.checked_at
+                            m.views,m.reach,m.likes,m.comments,m.saved,m.shares,m.checked_at,
+                            d.media_type,d.product_type,d.thumbnail_url,d.media_url
                         FROM meta_posts p
                         JOIN meta_accounts a ON a.id=p.account_id
                         LEFT JOIN meta_metrics m ON m.post_id=p.id
-                        ORDER BY p.scheduled_at_utc DESC LIMIT 150""")
+                        LEFT JOIN meta_media_details d ON d.media_id=p.media_id
+                        ORDER BY p.scheduled_at_utc DESC LIMIT 200""")
                     values["posts"] = c.fetchall()
                     c.execute("""SELECT
                         COUNT(*) total,
-                        SUM(status='published') published,
+                        SUM(status IN ('published','imported')) published,
                         SUM(status='scheduled') scheduled,
-                        SUM(status IN ('failed','needs_review')) attention
+                        SUM(status IN ('failed','needs_review')) attention,
+                        SUM(status='imported') imported
                         FROM meta_posts""")
                     values["totals"] = c.fetchone()
                     c.execute("""SELECT COALESCE(SUM(m.views),0) views,
                         COALESCE(SUM(m.likes),0) likes,
                         COALESCE(SUM(m.comments),0) comments
                         FROM meta_metrics m
-                        JOIN meta_posts p ON p.id=m.post_id WHERE p.status='published'""")
+                        JOIN meta_posts p ON p.id=m.post_id WHERE p.status IN ('published','imported')""")
                     values["totals"].update(c.fetchone())
+            for a in values["accounts"]:
+                a["synced_local"] = fmt_local(a.get("synced_at"))
+                a["token_saved_local"] = fmt_local(a.get("token_saved_at"))
             for p in values["posts"]:
                 p["scheduled_local"] = fmt_local(p["scheduled_at_utc"])
                 p["published_local"] = fmt_local(p["published_at"])
@@ -309,6 +324,24 @@ def save_account(request: Request, csrf: str = Form(...), token: str = Form(...)
         return go("Conta @" + username + " validada e token armazenado com criptografia.")
     except (GraphError, RuntimeError, pymysql.MySQLError) as exc:
         return go("Não foi possível cadastrar: " + str(exc)[:190], True)
+
+@app.post("/accounts/{account_id}/sync")
+def sync_account_action(account_id: int, request: Request, csrf: str = Form(...)):
+    require_form(request, csrf)
+    try:
+        with db_connection() as db:
+            init(db)
+            result = sync_account(db, account_id, graph, get_token)
+        message = ("@" + result["username"] + ": perfil atualizado; " +
+                   str(result["imported"]) + " post(s) novo(s) importado(s).")
+        if result["media_error"] or result["insights_partial"]:
+            message += " Algumas informações não foram disponibilizadas pela Meta."
+        return go(message)
+    except GraphError as exc:
+        return go("Sincronização não autorizada: " + str(exc)[:160], True)
+    except Exception:
+        LOG.exception("Failed account sync id=%s", account_id)
+        return go("Não foi possível sincronizar agora. Verifique o token e as permissões na Meta.", True)
 
 @app.post("/accounts/{account_id}/toggle")
 def toggle_account(account_id: int, request: Request, csrf: str = Form(...)):
@@ -589,7 +622,7 @@ def metrics_cycle(db, limit=12):
         c.execute("""SELECT p.id,p.account_id,p.media_id
             FROM meta_posts p JOIN meta_accounts a ON a.id=p.account_id
             LEFT JOIN meta_metrics m ON m.post_id=p.id
-            WHERE p.status='published' AND p.media_id IS NOT NULL
+            WHERE p.status IN ('published','imported') AND p.media_id IS NOT NULL
               AND a.status='active'
               AND (m.checked_at IS NULL
                    OR m.checked_at<DATE_SUB(UTC_TIMESTAMP(),INTERVAL 6 HOUR))
