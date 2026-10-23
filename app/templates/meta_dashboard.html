@@ -99,7 +99,7 @@ details{border:1px solid #373b49;border-radius:10px;padding:12px 14px;background
 </section>
 <section class="panel" id="publicar">
 <div class="paneltitle"><div><h2><span class="sectionno">02</span> Criar e agendar Reel</h2><p class="small muted" style="margin:7px 0 0">Escolha a conta, envie o MP4, escreva a legenda e defina quando publicar.</p></div><span class="pill">Publicação oficial · Instagram Reels</span></div>
-<form id="scheduleForm" method="post" action="/schedule"><input type="hidden" name="csrf" value="{{csrf}}">
+<form id="scheduleForm" method="post" action="/schedule"><input type="hidden" name="csrf" value="{{csrf}}"><input type="hidden" name="submit_id" value="{{submit_id}}"><input type="hidden" name="publish_mode" id="publishMode" value="schedule">
 <div class="steps">
 <div>
 <div class="field"><span>1. Em quais perfis vamos publicar?</span><div class="accountselect">
@@ -118,9 +118,9 @@ details{border:1px solid #373b49;border-radius:10px;padding:12px 14px;background
 </div>
 <div>
 <div class="helpbox"><strong>Como funciona?</strong><p style="margin:8px 0 0">Você escolhe o vídeo, e o Social LeagueCut o envia para o servidor. No horário marcado, a Meta recebe e publica o Reel. O painel guarda o link e coleta as métricas disponíveis.</p></div>
-<div class="field" style="margin-top:18px"><label for="scheduled">4. Data e horário (Fortaleza)</label><input id="scheduled" type="datetime-local" name="scheduled_at" value="{{now_local}}" required><div class="hint">Para testar agora, escolha um horário próximo. A VPS precisa estar ativa.</div></div>
+<div class="field" style="margin-top:18px"><label for="scheduled">4. Data e horário (somente para agendar)</label><input id="scheduled" type="datetime-local" name="scheduled_at" value="{{now_local}}"><div class="hint">Este horário só será usado ao clicar em Agendar publicação. Publicar Agora ignora o horário.</div></div>
 <div class="field" style="margin-top:18px"><label for="interval">Intervalo entre perfis</label><select id="interval" name="interval_minutes"><option value="0">Mesmo horário para todos</option><option value="15">15 minutos</option><option value="30" selected>30 minutos</option><option value="60">1 hora</option></select><div class="hint">Aplicável quando selecionar mais de uma conta.</div></div>
-<div class="options"><button class="btn" type="submit" id="scheduleBtn">Agendar publicação →</button><span class="small muted" id="scheduleHint">Nenhuma postagem é criada antes de confirmar.</span></div>
+<div class="options"><button class="btn" type="submit" id="publishNowBtn" data-publish-mode="now">▶ Publicar Agora</button><button class="btn secondary" type="submit" id="scheduleBtn" data-publish-mode="schedule">Agendar publicação →</button></div><div class="small muted" id="scheduleHint" role="status" style="margin-top:12px">Publicar Agora envia as contas selecionadas para a fila imediatamente. A Meta ainda precisará processar o vídeo antes de publicá-lo.</div>
 </div></div></form>
 </section>
 <section class="panel" id="lote">
@@ -213,10 +213,17 @@ drop.addEventListener("dragleave",()=>drop.classList.remove("drag"));
 drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("drag");if(e.dataTransfer.files.length){document.getElementById("upload").files=e.dataTransfer.files;sendVideo()}});
 document.getElementById("externalVideoUrl").addEventListener("input",e=>{document.getElementById("videoUrl").value=e.target.value.trim()});
 document.getElementById("scheduleForm").addEventListener("submit",e=>{
+ const hint=document.getElementById("scheduleHint");
+ const mode=e.submitter?.dataset?.publishMode==="now"?"now":"schedule";
+ document.getElementById("publishMode").value=mode;
  if(uploadBusy){e.preventDefault();document.getElementById("uploadStatus").textContent="O vídeo ainda está sendo enviado.";return}
  if(!document.getElementById("videoUrl").value){e.preventDefault();document.getElementById("uploadStatus").textContent="Envie um MP4 ou informe um link HTTPS na opção avançada.";document.getElementById("dropArea").scrollIntoView({behavior:"smooth",block:"center"});return}
- if(!e.currentTarget.querySelector("input[name=account_ids]:checked")){e.preventDefault();document.getElementById("scheduleHint").textContent="Selecione pelo menos uma conta.";return}
+ if(!e.currentTarget.querySelector("input[name=account_ids]:checked")){e.preventDefault();hint.textContent="Selecione pelo menos uma conta.";return}
+ if(mode==="schedule"&&!document.getElementById("scheduled").value){e.preventDefault();hint.textContent="Defina uma data e um horário para agendar.";return}
+ if(mode==="now"&&!window.confirm("Publicar Agora nas contas selecionadas? A Meta iniciará o processamento e poderá publicar assim que o vídeo estiver pronto.")){e.preventDefault();return}
+ hint.textContent=mode==="now"?"Enviando para publicação imediata…":"Salvando agendamento…";
  document.getElementById("scheduleBtn").disabled=true;
+ document.getElementById("publishNowBtn").disabled=true;
 });
 async function sendBatchVideos(){
  const files=Array.from(document.getElementById("batchUpload").files),status=document.getElementById("batchUploadStatus"),btn=document.getElementById("batchUploadBtn");
