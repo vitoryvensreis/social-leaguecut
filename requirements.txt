@@ -6,7 +6,3 @@ python-dotenv>=1,<2
 PyMySQL>=1.1,<2
 itsdangerous>=2.2,<3
 cryptography>=43,<49
-google-api-python-client>=2.150,<3
-google-auth-oauthlib>=1.2,<2
-instagrapi==3.0.26
-playwright>=1.56,<2
