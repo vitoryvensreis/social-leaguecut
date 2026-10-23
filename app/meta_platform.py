@@ -317,6 +317,70 @@ def home(request: Request):
     response.headers["Cache-Control"] = "no-store"
     return response
 
+def calendar_range(month):
+    """Return UTC naive boundaries covering the monthly calendar in Fortaleza."""
+    if not re.fullmatch(r"20[0-9]{2}-(0[1-9]|1[0-2])", month or ""):
+        raise ValueError("Mês inválido. Utilize AAAA-MM.")
+    year, number = map(int, month.split("-"))
+    first = datetime(year, number, 1)
+    following = (first.replace(year=year + 1, month=1) if number == 12
+                 else first.replace(month=number + 1))
+    # Always load leading/trailing days so the visual calendar is complete.
+    leading = first - timedelta(days=first.weekday())
+    trailing = following + timedelta(days=6)
+    start = leading.replace(tzinfo=TZ).astimezone(timezone.utc).replace(tzinfo=None)
+    end = trailing.replace(tzinfo=TZ).astimezone(timezone.utc).replace(tzinfo=None)
+    return start, end
+
+
+@app.get("/api/calendar")
+def calendar_api(request: Request, month: str, account_id: int | None = None):
+    if not authenticated(request):
+        raise HTTPException(status_code=401, detail="Faça login para visualizar o calendário.")
+    try:
+        start, end = calendar_range(month)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    if account_id is not None and account_id <= 0:
+        raise HTTPException(status_code=422,detail="Conta inválida.")
+    with db_connection() as db:
+        init(db)
+        with db.cursor() as c:
+            query = """SELECT p.id,p.status,p.caption,p.scheduled_at_utc,
+                       p.published_at,p.permalink,p.error_hint,
+                       a.id AS account_id,a.username
+                  FROM meta_posts p
+                  INNER JOIN meta_accounts a ON a.id=p.account_id
+                  WHERE p.status<>'dismissed'
+                    AND p.scheduled_at_utc >= %s AND p.scheduled_at_utc < %s"""
+            args = [start, end]
+            if account_id is not None:
+                query += " AND a.id=%s"
+                args.append(account_id)
+            query += " ORDER BY p.scheduled_at_utc,p.id LIMIT 2500"
+            c.execute(query, tuple(args))
+            rows = c.fetchall()
+    results=[]
+    for item in rows:
+        local = item["scheduled_at_utc"].replace(tzinfo=timezone.utc).astimezone(TZ)
+        link = item["permalink"] or ""
+        results.append({
+            "id": item["id"], "status": item["status"],
+            "label": publication_label(item["status"]),
+            "account_id": item["account_id"],
+            "username": item["username"],
+            "caption": (item["caption"] or "")[:500],
+            "day": local.strftime("%Y-%m-%d"),
+            "time": local.strftime("%H:%M"),
+            "local_datetime": local.strftime("%Y-%m-%dT%H:%M"),
+            "permalink": link if link.startswith("https://www.instagram.com/") else None,
+            "error": (item["error_hint"] or "")[:220],
+        })
+    return JSONResponse({"month":month,"timezone":"America/Fortaleza",
+                        "events":results, "truncated":len(results)>=2500},
+                        headers={"Cache-Control":"no-store"})
+
+
 @app.post("/login")
 def login(request: Request, password: str = Form(...), csrf: str = Form(...)):
     expected = os.getenv("ADMIN_PASSWORD", "")
