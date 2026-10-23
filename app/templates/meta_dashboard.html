@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Social LeagueCut — Meta Studio</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0c12;--side:#101118;--panel:#161820;--card:#1c1f2b;--edge:#292d3b;--text:#f5f6fb;--muted:#9b9fac;--accent:#fa4c67;--good:#48d4a1;--warn:#f7b85d;--blue:#8f9dfd}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);font:14px Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text)}
+a{color:inherit;text-decoration:none}a:hover{color:#fff}button,input,textarea{font:inherit}button{cursor:pointer}
+.page{display:grid;grid-template-columns:244px minmax(0,1fr);min-height:100vh}
+aside{background:var(--side);border-right:1px solid var(--edge);padding:30px 20px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.brand{font-size:18px;font-weight:900;letter-spacing:-.045em}.brand span{color:var(--accent)}.brand small{display:block;font-size:10px;letter-spacing:.14em;color:var(--muted);margin-top:7px}
+nav{margin-top:40px;display:grid;gap:6px}.navlink{border-radius:9px;padding:13px 12px;color:var(--muted);display:flex;gap:10px;align-items:center;font-weight:600}.navlink:hover,.navlink.active{background:#25202a;color:var(--text)}.navlink.active{border-left:3px solid var(--accent)}.foot{margin-top:auto;border-top:1px solid var(--edge);padding-top:20px;color:var(--muted);font-size:12px;line-height:1.7}
+main{min-width:0;padding:38px clamp(18px,3.7vw,64px) 70px;max-width:1660px;width:100%;margin:auto}
+header{display:flex;gap:14px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:27px}.eyebrow{font-size:11px;letter-spacing:.15em;color:var(--accent);font-weight:800;text-transform:uppercase}h1{font-size:clamp(27px,3vw,40px);letter-spacing:-.065em;margin:8px 0}h2{font-size:18px;margin:0;letter-spacing:-.035em}p{line-height:1.55}.muted{color:var(--muted)}.tiny{font-size:12px}.logout{background:transparent;border:1px solid var(--edge);border-radius:9px;color:#e4e5ef;padding:10px 14px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:24px 0}.kpi,.panel{border:1px solid var(--edge);background:var(--panel);border-radius:13px}.kpi{padding:22px;min-height:128px}.kpi span{color:var(--muted);font-size:12px}.kpi b{display:block;font-size:34px;letter-spacing:-.06em;margin-top:14px;line-height:1}.kpi em{font-style:normal;font-size:11px;color:var(--muted)}
+.panel{padding:24px;margin-top:18px}.panelhead{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;margin-bottom:19px}.sectionno{display:inline-flex;width:25px;height:25px;align-items:center;justify-content:center;border-radius:7px;background:#3e2933;color:#ff8c9e;font-size:11px;font-weight:800;margin-right:9px}
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:17px}.field label,.field>span{display:block;color:#cdd0dd;font-size:12px;font-weight:700;margin-bottom:8px}.field input,.field textarea{display:block;width:100%;border:1px solid #3a3d4c;background:#10121a;border-radius:8px;padding:12px 13px;color:white;outline:none}.field input:focus,.field textarea:focus{border-color:var(--accent)}.field textarea{resize:vertical;min-height:100px}.field input[type=file]{padding:11px}.wide{grid-column:1/-1}
+.btn{border:0;border-radius:8px;background:var(--accent);color:white;font-weight:750;padding:12px 18px}.btn:hover{filter:brightness(1.13)}.btn.secondary{background:#282c39;color:#e9eaf3;border:1px solid #3b4050}.btn.small{padding:8px 10px;font-size:12px}.actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.notice{padding:13px 16px;border:1px solid #324f46;border-radius:10px;background:#142a25;color:#b3f7d9;margin:15px 0}.notice.error{border-color:#63323e;background:#2a171f;color:#ffc0cd}
+.tag{display:inline-flex;align-items:center;gap:6px;border:1px solid #444953;background:#262a37;color:#c6cadb;border-radius:99px;padding:5px 9px;font-size:11px;font-weight:650;white-space:nowrap}.tag.active,.tag.published{color:#78eab7;border-color:#215b48;background:#15332a}.tag.failed,.tag.needs_review{color:#ffbd82;background:#33251d;border-color:#67412b}.tag.scheduled,.tag.processing,.tag.creating,.tag.publishing{color:#bac1ff;background:#292e47;border-color:#444e7b}.tag.cancelled,.tag.paused{color:#aeb3c1}
+.tablewrap{overflow:auto;max-width:100%}table{width:100%;border-collapse:collapse;min-width:760px}th{text-align:left;color:var(--muted);font-size:10px;letter-spacing:.09em;text-transform:uppercase;font-weight:750;white-space:nowrap}td{font-size:12px}th,td{padding:15px 12px;border-bottom:1px solid var(--edge);vertical-align:middle}tbody tr:last-child td{border:0}td strong{font-size:13px}td a{color:#adb9ff}td a:hover{text-decoration:underline}.clamp{max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.accountselect{display:flex;flex-wrap:wrap;gap:8px}.accountselect label{border:1px solid #373b49;background:#222530;padding:10px 12px;border-radius:8px;cursor:pointer;display:flex;gap:8px;align-items:center;font-weight:600}.accountselect label:has(input:checked){border-color:var(--accent);background:#3a242c}.accountselect input{accent-color:var(--accent)}.accountselect label.disabled{opacity:.5}.emptystate{padding:27px;text-align:center;color:var(--muted)}
+.loginlayout{min-height:100vh;display:grid;place-items:center;padding:22px;background:radial-gradient(ellipse at 75% 5%,#38232e,transparent 39%),var(--bg)}.loginpanel{max-width:470px;width:100%;background:var(--panel);border:1px solid var(--edge);border-radius:17px;padding:37px}.loginpanel input{width:100%;padding:14px 13px;border:1px solid var(--edge);color:white;background:var(--bg);border-radius:9px;margin:12px 0 17px}.loginpanel .btn{width:100%}
+.split{display:grid;grid-template-columns:1.3fr .7fr;gap:18px}.hints{border:1px solid #394056;background:#202536;border-radius:10px;padding:16px;color:#bec9e4;font-size:12px;line-height:1.65}.legend{display:flex;gap:13px;flex-wrap:wrap;align-items:center}.metric{font-variant-numeric:tabular-nums;font-weight:750}.tokenbox{display:grid;grid-template-columns:1fr auto;align-items:end;gap:12px}.tokenbox .field{min-width:0}
+code{color:#ff93a9;font-size:11px}button:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:1150px){.kpis{grid-template-columns:repeat(2,1fr)}.split{grid-template-columns:1fr}}
+@media(max-width:760px){.page{grid-template-columns:1fr}aside{position:static;height:auto;padding:17px}nav{margin-top:14px;display:flex;overflow:auto}.navlink{white-space:nowrap}.foot{display:none}main{padding:24px 15px 50px}.formgrid{grid-template-columns:1fr}.kpis{grid-template-columns:1fr 1fr}.kpi{padding:17px;min-height:105px}.kpi b{font-size:28px}.panel{padding:18px}.tokenbox{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+{% if not logged %}
+<div class="loginlayout"><div class="loginpanel">
+<div class="brand"><span>◉</span> SOCIAL LEAGUECUT <small>META STUDIO / INSTAGRAM</small></div>
+<h1 style="margin-top:40px">Bem-vindo de volta.</h1>
+<p class="muted">Gerencie os tokens de teste, agende Reels e acompanhe os dados reais da API oficial da Meta.</p>
+{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+{% if not configured %}<div class="notice error">Configure ADMIN_PASSWORD, SESSION_SECRET e acesso ao MySQL na VPS.</div>{% endif %}
+<form action="/login" method="post"><input type="hidden" name="csrf" value="{{csrf}}">
+<label for="password" class="tiny">Senha administrativa</label><input type="password" name="password" id="password" autocomplete="current-password" required>
+<button class="btn" type="submit">Acessar painel →</button></form></div></div>
+{% else %}
+<div class="page">
+<aside><a class="brand" href="/"><span>◉</span> SOCIAL LEAGUECUT <small>META STUDIO / API OFICIAL</small></a>
+<nav><a class="navlink active" href="#overview">▦ Visão geral</a><a class="navlink" href="#accounts">◎ Contas e tokens</a><a class="navlink" href="#scheduler">◷ Agendar Reels</a><a class="navlink" href="#analytics">▥ Publicações e dados</a></nav>
+<div class="foot">Publicação pelo Graph API<br>Fuso da agenda: <strong>Fortaleza (UTC−3)</strong><br>Tokens criptografados no servidor.</div></aside>
+<main>
+<header><div><div class="eyebrow">Social LeagueCut / Painel administrativo</div><h1 id="overview">Seu conteúdo. No controle.</h1><div class="muted">Agendamento e análise de Reels com contas de teste autorizadas.</div></div>
+<form method="post" action="/logout"><input type="hidden" name="csrf" value="{{csrf}}"><button class="logout" type="submit">Sair ↗</button></form></header>
+{% if error %}<div class="notice error">{{error}}</div>{% endif %}
+{% if success %}<div class="notice">{{success}}</div>{% endif %}
+<section class="kpis">
+<div class="kpi"><span>Contas cadastradas</span><b>{{accounts|length}}</b><em>Tokens manuais verificados</em></div>
+<div class="kpi"><span>Publicações agendadas</span><b>{{totals.scheduled or 0}}</b><em>Aguardando o horário</em></div>
+<div class="kpi"><span>Reels publicados</span><b>{{totals.published or 0}}</b><em>Confirmados pela Meta</em></div>
+<div class="kpi"><span>Visualizações conhecidas</span><b>{{"{:,}".format(totals.views or 0).replace(",",".")}}</b><em>Última coleta disponível</em></div>
+</section>
+<div class="split" id="accounts">
+<section class="panel" style="margin-top:0">
+<div class="panelhead"><h2><span class="sectionno">01</span> Contas conectadas</h2><span class="tag">{{accounts|length}} perfil(is)</span></div>
+<div class="tablewrap"><table style="min-width:450px"><thead><tr><th>Instagram</th><th>ID Meta</th><th>Status</th><th>Ação</th></tr></thead>
+<tbody>
+{% for a in accounts %}<tr><td><strong>@{{a.username}}</strong><div class="tiny muted">Token cadastrado: {{a.token_saved_at.strftime("%d/%m/%Y")}}</div></td><td class="muted">{{a.ig_scoped_id}}</td><td><span class="tag {{a.status}}">{{"Ativa" if a.status=="active" else "Pausada"}}</span></td><td><form method="post" action="/accounts/{{a.id}}/toggle"><input type="hidden" name="csrf" value="{{csrf}}"><button type="submit" class="btn secondary small">{{"Pausar" if a.status=="active" else "Ativar"}}</button></form></td></tr>
+{% else %}<tr><td colspan="4" class="emptystate">Nenhuma conta conectada. Cole o primeiro token ao lado.</td></tr>{% endfor %}
+</tbody></table></div>
+</section>
+<section class="panel" style="margin-top:0"><div class="panelhead"><h2><span class="sectionno">02</span> Adicionar token</h2></div>
+<p class="muted tiny">Gere o token em Meta for Developers → Instagram → Gerar tokens de acesso. Cole aqui. A conta é identificada automaticamente pelo token.</p>
+<form method="post" action="/accounts"><input type="hidden" name="csrf" value="{{csrf}}">
+<div class="field"><label for="token">Token de acesso do Instagram</label><input id="token" name="token" type="password" minlength="30" autocomplete="off" placeholder="IGQ..." required></div>
+<p class="tiny muted">Nunca mostramos o token completo depois de salvo. Colar um novo token da mesma conta atualiza o anterior.</p>
+<button class="btn" type="submit">Validar e conectar conta</button></form>
+</section></div>
+<section class="panel" id="scheduler">
+<div class="panelhead"><h2><span class="sectionno">03</span> Programar publicação</h2><span class="tag">Reels · Instagram API</span></div>
+<form id="scheduleForm" action="/schedule" method="post"><input type="hidden" name="csrf" value="{{csrf}}">
+<div class="formgrid">
+<div class="field wide"><span>Selecione as contas que receberão o Reel</span><div class="accountselect">
+{% for a in accounts %}<label class="{{'disabled' if a.status!='active' else ''}}"><input type="checkbox" name="account_ids" value="{{a.id}}" {{'disabled' if a.status!='active' else ''}}> @{{a.username}}</label>
+{% else %}<span class="muted tiny">Cadastre primeiro ao menos uma conta.</span>{% endfor %}</div></div>
+<div class="field wide"><label for="upload">Arquivo MP4 (opcional)</label><div class="actions"><input type="file" id="upload" accept=".mp4,video/mp4" style="max-width:450px"><button type="button" id="uploadBtn" class="btn secondary" onclick="sendVideo()">Enviar vídeo</button><span id="uploadStatus" class="muted tiny">Ou informe uma URL pública HTTPS abaixo.</span></div></div>
+<div class="field wide"><label for="videoUrl">URL HTTPS do vídeo para a Meta</label><input type="url" id="videoUrl" name="video_url" placeholder="https://.../video.mp4" required><div class="tiny muted" style="margin-top:6px">O arquivo precisa estar acessível publicamente até a publicação. Para upload direto, configure o limite no Nginx (250 MB).</div></div>
+<div class="field wide"><label for="caption">Legenda e hashtags</label><textarea id="caption" name="caption" maxlength="2200" placeholder="Escreva a legenda do Reel..."></textarea></div>
+<div class="field"><label for="scheduled">Data e hora da primeira postagem · Fortaleza</label><input type="datetime-local" name="scheduled_at" id="scheduled" value="{{now_local}}" required></div>
+<div class="field"><label for="interval">Intervalo entre as contas (minutos)</label><input type="number" name="interval_minutes" id="interval" min="0" max="180" value="30"><div class="tiny muted" style="margin-top:6px">0 = todas no mesmo horário. 30 = uma conta a cada meia hora.</div></div>
+<div class="wide actions"><button class="btn" type="submit">Agendar publicações →</button><span class="tiny muted">O sistema publica automaticamente quando chegar a hora, desde que o servidor e a API estejam disponíveis.</span></div>
+</div></form>
+</section>
+<section class="panel" id="analytics">
+<div class="panelhead"><div><h2><span class="sectionno">04</span> Publicações e métricas</h2><p class="muted tiny" style="margin:7px 0 0">Informações consultadas diretamente na Meta. N/D significa que a API ainda não disponibilizou o dado.</p></div><div class="actions"><input id="search" style="border:1px solid var(--edge);border-radius:8px;background:var(--bg);color:#fff;padding:10px 12px" oninput="filterPosts(this.value)" placeholder="Buscar conta ou status"><button onclick="location.reload()" class="btn secondary small">Atualizar ↻</button></div></div>
+<div class="tablewrap"><table id="postTable"><thead><tr><th>Agendado</th><th>Conta</th><th>Status</th><th>Views</th><th>Alcance</th><th>Curtidas</th><th>Comentários</th><th>Salvos</th><th>Compart.</th><th>Última leitura</th><th>Reel / ações</th></tr></thead>
+<tbody>{% for p in posts %}<tr>
+<td style="white-space:nowrap">{{p.scheduled_local}}</td><td><strong>@{{p.username}}</strong><div class="clamp muted tiny" title="{{p.caption}}">{{p.caption or "Sem legenda"}}</div></td>
+<td><span class="tag {{p.status}}">{{p.status}}</span>{% if p.error_hint %}<div class="tiny" style="color:#ffc492;max-width:160px">{{p.error_hint}}</div>{% endif %}</td>
+<td class="metric">{{p.views if p.views is not none else "N/D"}}</td><td class="metric">{{p.reach if p.reach is not none else "N/D"}}</td>
+<td class="metric">{{p.likes if p.likes is not none else "N/D"}}</td><td class="metric">{{p.comments if p.comments is not none else "N/D"}}</td>
+<td class="metric">{{p.saved if p.saved is not none else "N/D"}}</td><td class="metric">{{p.shares if p.shares is not none else "N/D"}}</td>
+<td style="white-space:nowrap">{{p.checked_local}}</td><td>{% if p.permalink %}<a href="{{p.permalink}}" target="_blank" rel="noopener noreferrer">Abrir Reel ↗</a>{% elif p.status=="scheduled" %}<form action="/posts/{{p.id}}/cancel" method="post"><input type="hidden" name="csrf" value="{{csrf}}"><button class="btn secondary small" type="submit">Cancelar</button></form>{% else %}—{% endif %}</td>
+</tr>{% else %}<tr><td colspan="11" class="emptystate">As publicações vão aparecer aqui quando você criar o primeiro agendamento.</td></tr>{% endfor %}</tbody></table></div>
+<p class="tiny muted">Os jobs com status <strong>needs_review</strong> precisam de conferência manual no Instagram: o sistema não republica automaticamente quando o retorno da Meta é incerto.</p>
+</section>
+<section class="hints" style="margin-top:20px"><strong>Como funciona a conexão?</strong> O token é obtido manualmente no painel da Meta e fica criptografado no MySQL. A geração de tokens não é feita pelo Social LeagueCut. Para publicar são necessárias permissões de publicação e conta Instagram profissional autorizada no app em desenvolvimento. As métricas dependem da permissão de Insights e podem variar por Reel. O token poderá precisar ser gerado novamente quando expirar.</section>
+</main></div>
+<script>
+function filterPosts(value){var q=value.trim().toLowerCase();document.querySelectorAll("#postTable tbody tr").forEach(function(row){row.hidden=!row.textContent.toLowerCase().includes(q)})}
+async function sendVideo(){
+ var file=document.getElementById("upload").files[0],btn=document.getElementById("uploadBtn"),status=document.getElementById("uploadStatus");
+ if(!file){status.textContent="Selecione um MP4 primeiro.";return}
+ if(!file.name.toLowerCase().endsWith(".mp4")||file.size>250*1024*1024){status.textContent="Use um MP4 de até 250 MB.";return}
+ var form=new FormData();form.append("csrf",document.querySelector("#scheduleForm input[name=csrf]").value);form.append("video",file);
+ btn.disabled=true;status.textContent="Enviando "+file.name+"...";
+ try{var res=await fetch("/upload",{method:"POST",body:form,credentials:"same-origin"});var data=await res.json();if(!res.ok)throw Error(data.detail||"Falha no upload");document.getElementById("videoUrl").value=data.url;status.textContent="Vídeo enviado! URL preenchida e pronta para agendar."}
+ catch(e){status.textContent=e.message||"Falha no upload"}
+ finally{btn.disabled=false}
+}
+</script>
+{% endif %}
+</body></html>
