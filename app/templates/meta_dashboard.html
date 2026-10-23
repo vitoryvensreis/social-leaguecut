@@ -1,153 +1,238 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>Social LeagueCut — Meta Studio</title>
+<title>Social LeagueCut — Instagram Studio</title>
 <style>
-:root{color-scheme:dark;--bg:#0b0c12;--side:#101118;--panel:#161820;--card:#1c1f2b;--edge:#292d3b;--text:#f5f6fb;--muted:#9b9fac;--accent:#fa4c67;--good:#48d4a1;--warn:#f7b85d;--blue:#8f9dfd}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);font:14px Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text)}
-a{color:inherit;text-decoration:none}a:hover{color:#fff}button,input,textarea{font:inherit}button{cursor:pointer}
-.page{display:grid;grid-template-columns:244px minmax(0,1fr);min-height:100vh}
-aside{background:var(--side);border-right:1px solid var(--edge);padding:30px 20px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
-.brand{font-size:18px;font-weight:900;letter-spacing:-.045em}.brand span{color:var(--accent)}.brand small{display:block;font-size:10px;letter-spacing:.14em;color:var(--muted);margin-top:7px}
-nav{margin-top:40px;display:grid;gap:6px}.navlink{border-radius:9px;padding:13px 12px;color:var(--muted);display:flex;gap:10px;align-items:center;font-weight:600}.navlink:hover,.navlink.active{background:#25202a;color:var(--text)}.navlink.active{border-left:3px solid var(--accent)}.foot{margin-top:auto;border-top:1px solid var(--edge);padding-top:20px;color:var(--muted);font-size:12px;line-height:1.7}
-main{min-width:0;padding:38px clamp(18px,3.7vw,64px) 70px;max-width:1660px;width:100%;margin:auto}
-header{display:flex;gap:14px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:27px}.eyebrow{font-size:11px;letter-spacing:.15em;color:var(--accent);font-weight:800;text-transform:uppercase}h1{font-size:clamp(27px,3vw,40px);letter-spacing:-.065em;margin:8px 0}h2{font-size:18px;margin:0;letter-spacing:-.035em}p{line-height:1.55}.muted{color:var(--muted)}.tiny{font-size:12px}.logout{background:transparent;border:1px solid var(--edge);border-radius:9px;color:#e4e5ef;padding:10px 14px}
-.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:24px 0}.kpi,.panel{border:1px solid var(--edge);background:var(--panel);border-radius:13px}.kpi{padding:22px;min-height:128px}.kpi span{color:var(--muted);font-size:12px}.kpi b{display:block;font-size:34px;letter-spacing:-.06em;margin-top:14px;line-height:1}.kpi em{font-style:normal;font-size:11px;color:var(--muted)}
-.panel{padding:24px;margin-top:18px}.panelhead{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;margin-bottom:19px}.sectionno{display:inline-flex;width:25px;height:25px;align-items:center;justify-content:center;border-radius:7px;background:#3e2933;color:#ff8c9e;font-size:11px;font-weight:800;margin-right:9px}
-.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:17px}.field label,.field>span{display:block;color:#cdd0dd;font-size:12px;font-weight:700;margin-bottom:8px}.field input,.field textarea{display:block;width:100%;border:1px solid #3a3d4c;background:#10121a;border-radius:8px;padding:12px 13px;color:white;outline:none}.field input:focus,.field textarea:focus{border-color:var(--accent)}.field textarea{resize:vertical;min-height:100px}.field input[type=file]{padding:11px}.wide{grid-column:1/-1}
-.btn{border:0;border-radius:8px;background:var(--accent);color:white;font-weight:750;padding:12px 18px}.btn:hover{filter:brightness(1.13)}.btn.secondary{background:#282c39;color:#e9eaf3;border:1px solid #3b4050}.btn.small{padding:8px 10px;font-size:12px}.actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.notice{padding:13px 16px;border:1px solid #324f46;border-radius:10px;background:#142a25;color:#b3f7d9;margin:15px 0}.notice.error{border-color:#63323e;background:#2a171f;color:#ffc0cd}
-.tag{display:inline-flex;align-items:center;gap:6px;border:1px solid #444953;background:#262a37;color:#c6cadb;border-radius:99px;padding:5px 9px;font-size:11px;font-weight:650;white-space:nowrap}.tag.active,.tag.published{color:#78eab7;border-color:#215b48;background:#15332a}.tag.failed,.tag.needs_review{color:#ffbd82;background:#33251d;border-color:#67412b}.tag.scheduled,.tag.processing,.tag.creating,.tag.publishing{color:#bac1ff;background:#292e47;border-color:#444e7b}.tag.cancelled,.tag.paused{color:#aeb3c1}
-.tablewrap{overflow:auto;max-width:100%}table{width:100%;border-collapse:collapse;min-width:760px}th{text-align:left;color:var(--muted);font-size:10px;letter-spacing:.09em;text-transform:uppercase;font-weight:750;white-space:nowrap}td{font-size:12px}th,td{padding:15px 12px;border-bottom:1px solid var(--edge);vertical-align:middle}tbody tr:last-child td{border:0}td strong{font-size:13px}td a{color:#adb9ff}td a:hover{text-decoration:underline}.clamp{max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.accountselect{display:flex;flex-wrap:wrap;gap:8px}.accountselect label{border:1px solid #373b49;background:#222530;padding:10px 12px;border-radius:8px;cursor:pointer;display:flex;gap:8px;align-items:center;font-weight:600}.accountselect label:has(input:checked){border-color:var(--accent);background:#3a242c}.accountselect input{accent-color:var(--accent)}.accountselect label.disabled{opacity:.5}.emptystate{padding:27px;text-align:center;color:var(--muted)}
-.loginlayout{min-height:100vh;display:grid;place-items:center;padding:22px;background:radial-gradient(ellipse at 75% 5%,#38232e,transparent 39%),var(--bg)}.loginpanel{max-width:470px;width:100%;background:var(--panel);border:1px solid var(--edge);border-radius:17px;padding:37px}.loginpanel input{width:100%;padding:14px 13px;border:1px solid var(--edge);color:white;background:var(--bg);border-radius:9px;margin:12px 0 17px}.loginpanel .btn{width:100%}
-.split{display:grid;grid-template-columns:1.3fr .7fr;gap:18px}.hints{border:1px solid #394056;background:#202536;border-radius:10px;padding:16px;color:#bec9e4;font-size:12px;line-height:1.65}.legend{display:flex;gap:13px;flex-wrap:wrap;align-items:center}.metric{font-variant-numeric:tabular-nums;font-weight:750}.tokenbox{display:grid;grid-template-columns:1fr auto;align-items:end;gap:12px}.tokenbox .field{min-width:0}
-code{color:#ff93a9;font-size:11px}button:disabled{opacity:.5;cursor:not-allowed}
-@media(max-width:1150px){.kpis{grid-template-columns:repeat(2,1fr)}.split{grid-template-columns:1fr}}
-@media(max-width:760px){.page{grid-template-columns:1fr}aside{position:static;height:auto;padding:17px}nav{margin-top:14px;display:flex;overflow:auto}.navlink{white-space:nowrap}.foot{display:none}main{padding:24px 15px 50px}.formgrid{grid-template-columns:1fr}.kpis{grid-template-columns:1fr 1fr}.kpi{padding:17px;min-height:105px}.kpi b{font-size:28px}.panel{padding:18px}.tokenbox{grid-template-columns:1fr}}
+:root{color-scheme:dark;--bg:#0b0d12;--side:#101219;--panel:#171a23;--card:#1e222e;--line:#303440;--text:#f5f6fa;--muted:#a7aab9;--red:#ff496b;--green:#5be0ac;--orange:#ffc276;--blue:#9aaaff}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:14px Inter,"Segoe UI",system-ui,-apple-system,sans-serif}
+a{color:inherit;text-decoration:none}a:hover{color:#fff}button,input,textarea,select{font:inherit}button{cursor:pointer}.layout{display:grid;grid-template-columns:226px minmax(0,1fr);min-height:100vh}
+aside{height:100vh;position:sticky;top:0;display:flex;flex-direction:column;background:var(--side);padding:26px 17px;border-right:1px solid var(--line)}
+.brand{display:block;line-height:1.2;font-weight:900;font-size:16px;letter-spacing:-.045em}.brand i{color:var(--red);font-style:normal}.brand small{display:block;color:var(--muted);letter-spacing:.13em;font-size:10px;font-weight:700;margin-top:7px}
+.menu{display:grid;gap:5px;margin-top:40px}.menu a{padding:13px 12px;border-radius:9px;color:#b5b8c7;font-weight:650}.menu a:hover,.menu a:first-child{background:#2a242e;color:#fff}.sidefoot{margin-top:auto;font-size:11px;color:var(--muted);line-height:1.8;padding:15px 6px;border-top:1px solid var(--line)}
+main{max-width:1540px;margin:auto;padding:34px clamp(16px,3.2vw,54px) 70px;width:100%;min-width:0}
+.top{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;margin-bottom:21px}.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.13em;font-weight:800;color:#f7798e}
+h1{font-size:clamp(27px,3.2vw,41px);line-height:1.13;letter-spacing:-.06em;margin:8px 0}h2{font-size:20px;margin:0;letter-spacing:-.045em}h3{margin:0;font-size:15px;letter-spacing:-.02em}p{line-height:1.5}.muted{color:var(--muted)}.small{font-size:12px}.micro{font-size:11px}.header-actions{display:flex;gap:10px;align-items:center}
+.btn{border:1px solid transparent;border-radius:9px;background:var(--red);color:#fff;font-weight:800;padding:12px 17px;display:inline-flex;justify-content:center;align-items:center;gap:7px}.btn:hover{filter:brightness(1.11)}.btn.secondary{background:#292d39;border-color:#3b4050;color:#edf0f9}.btn.flat{background:transparent;border-color:var(--line);color:#e7eaf2}.btn.sm{font-size:12px;padding:9px 12px}.btn:disabled{opacity:.56;cursor:not-allowed}
+.card,.panel{border:1px solid var(--line);border-radius:15px;background:var(--panel)}.panel{padding:23px;margin-top:18px}.paneltitle{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:17px}
+.sectionno{display:inline-grid;place-items:center;min-width:26px;height:26px;border-radius:8px;background:#3a2630;color:#ff9caf;font-size:11px;font-weight:800;margin-right:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid #454957;border-radius:100px;background:#282b36;color:#c7cad8;padding:5px 9px;font-size:11px;white-space:nowrap;font-weight:700}
+.pill.active,.pill.published,.pill.imported{color:#72e2b2;background:#15372b;border-color:#28624a}
+.pill.failed,.pill.needs_review{color:var(--orange);background:#382c20;border-color:#6a4e32}
+.pill.scheduled,.pill.processing,.pill.creating,.pill.publishing{color:#bcc7ff;background:#282d4b;border-color:#404d81}
+.notice{padding:13px 16px;border:1px solid #2c674e;background:#17372c;color:#bffbdb;border-radius:10px;margin:14px 0}.notice.error{background:#351e26;color:#ffc6d0;border-color:#783544}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:21px 0}.kpi{border:1px solid var(--line);background:linear-gradient(155deg,#1b1e29,#151820);padding:18px 20px;border-radius:13px;min-height:111px}.kpi span{font-size:12px;color:var(--muted)}.kpi b{font-size:31px;letter-spacing:-.06em;display:block;margin:11px 0 3px;font-variant-numeric:tabular-nums}.kpi small{color:var(--muted);font-size:10px}
+.accounts{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:13px}.account{padding:17px;background:var(--card);border:1px solid #353846;border-radius:12px;min-width:0}.account-top{display:flex;gap:12px;align-items:center}.avatar{width:53px;height:53px;border-radius:50%;border:2px solid #86405a;background:#343644;display:grid;place-items:center;font-size:21px;overflow:hidden;flex-shrink:0}.avatar img{width:100%;height:100%;object-fit:cover}.userlabel{min-width:0;flex:1}.userlabel strong{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.userlabel small{color:var(--muted);font-size:11px}.stats3{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:15px 0;padding:14px 0;text-align:center}.stats3 b{display:block;font-size:19px;font-variant-numeric:tabular-nums}.stats3 span{display:block;font-size:11px;color:var(--muted);margin-top:3px}.account-insight{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-bottom:12px}.account-insight>div{padding:9px 10px;background:#151821;border-radius:8px}.account-insight b{font-size:16px;display:block}.account-insight span{color:var(--muted);font-size:10px}.account-actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center}.account-actions form{margin:0}.account-bio{color:#adb1be;font-size:12px;white-space:pre-line;line-height:1.45;max-height:53px;overflow:hidden}
+.field label,.field>span{display:block;font-size:12px;color:#e1e2ed;font-weight:750;margin-bottom:8px}.field input:not([type=checkbox]):not([type=file]),.field textarea,.field select{width:100%;background:#11141c;border:1px solid #3b4051;border-radius:9px;color:#fff;padding:12px 13px;outline:none}.field input:focus,.field textarea:focus,.field select:focus{border-color:#ff6582}.field textarea{resize:vertical;min-height:105px}.field .hint{font-size:11px;color:var(--muted);margin-top:7px;line-height:1.4}
+.formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.spanall{grid-column:1/-1}.accountselect{display:flex;gap:8px;flex-wrap:wrap}.accountselect label{display:inline-flex;align-items:center;gap:8px;border:1px solid #3b4050;background:#252936;border-radius:10px;padding:11px 13px;font-size:12px;font-weight:700;cursor:pointer}.accountselect label:has(input:checked){border-color:var(--red);background:#39252f}.accountselect input{accent-color:var(--red)}.accountselect .disabled{opacity:.45}
+.steps{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(290px,.8fr);gap:17px}.droparea{display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;min-height:180px;background:#12151e;border:1.5px dashed #4b5060;border-radius:13px;padding:23px;text-align:center;cursor:pointer}.droparea:hover,.droparea.drag{border-color:var(--red);background:#231a25}.droparea .uploadicon{width:42px;height:42px;display:grid;place-items:center;background:#37232d;border-radius:10px;font-size:24px;color:#ff8ea4}.droparea strong{font-size:14px}.droparea input{display:none}.uploadline{height:7px;background:#353847;border-radius:8px;overflow:hidden;margin-top:12px}.uploadline i{display:block;height:100%;background:var(--red);width:0%;transition:width .2s}.video-preview{display:none;max-width:180px;width:100%;max-height:260px;border-radius:9px;margin:12px auto 0;background:#000}
+.helpbox{padding:17px;border:1px solid #394153;background:#222735;border-radius:11px;color:#c0c6d8;line-height:1.7;font-size:12px}.helpbox strong{color:#fff}.sep{height:1px;background:var(--line);margin:19px 0}.options{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:18px}
+details{border:1px solid #373b49;border-radius:10px;padding:12px 14px;background:#1d212b}details summary{cursor:pointer;font-size:12px;font-weight:750;color:#d9dce8}details[open] summary{margin-bottom:14px}
+.posts{display:grid;gap:10px}.post{display:grid;grid-template-columns:74px minmax(160px,1.4fr) minmax(125px,.85fr) minmax(210px,1.2fr) auto;gap:14px;align-items:center;border:1px solid #313642;background:#1c202b;border-radius:12px;padding:11px 13px;min-width:0}.thumb{width:72px;height:88px;background:linear-gradient(150deg,#36303c,#232b39);border-radius:8px;object-fit:cover}.thumbempty{display:grid;place-items:center;color:#d58eaa;font-size:21px}.post-title{min-width:0}.post-title strong{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px}.post-title p{color:var(--muted);margin:7px 0 0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.post-title small{display:block;margin-top:5px;color:var(--muted)}.poststats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.poststats b{display:block;font-size:16px;font-variant-numeric:tabular-nums}.poststats span{display:block;color:var(--muted);font-size:10px;margin-top:3px}.postbtn{display:flex;flex-direction:column;align-items:stretch;gap:6px}.postbtn form{margin:0}.postbtn a{text-align:center;color:#aebaff;font-size:12px}
+.filters{display:flex;gap:9px;flex-wrap:wrap}.filters input,.filters select{background:#11141c;border:1px solid #3c4050;border-radius:9px;color:#fff;padding:10px 12px;min-width:130px}.empty{padding:36px 15px;text-align:center;color:var(--muted);background:#1d2029;border-radius:12px}
+.loginbg{display:grid;place-items:center;min-height:100vh;padding:20px;background:radial-gradient(ellipse at 73% 4%,#3b1e2b,transparent 42%),var(--bg)}.login{max-width:420px;width:100%;padding:35px;background:var(--panel);border:1px solid var(--line);border-radius:16px}.login input{margin:10px 0 17px;padding:14px;width:100%;border:1px solid var(--line);border-radius:9px;color:#fff;background:#101219}.login button{width:100%}
+@media(max-width:1180px){.steps{grid-template-columns:1fr}.post{grid-template-columns:68px minmax(140px,1fr) minmax(130px,.6fr) auto}.poststats{grid-column:2/-1}.postbtn{grid-column:4;grid-row:1}.kpis{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:760px){.layout{grid-template-columns:1fr}aside{position:static;height:auto;padding:17px 18px}.menu{display:flex;overflow-x:auto;margin-top:16px;gap:5px}.menu a{white-space:nowrap;padding:10px}.sidefoot{display:none}main{padding:24px 15px 55px}.panel{padding:17px}.formgrid{grid-template-columns:1fr}.spanall{grid-column:auto}.accounts{grid-template-columns:1fr}.kpis{gap:9px}.kpi{padding:15px;min-height:100px}.kpi b{font-size:26px}.post{grid-template-columns:64px 1fr auto;gap:9px}.thumb{width:62px;height:79px}.poststatus{grid-column:2}.poststats{grid-column:1/-1;grid-row:auto;border-top:1px solid var(--line);padding-top:10px}.postbtn{grid-column:3;grid-row:1}.post-title p{max-width:200px}}
 </style>
 </head>
 <body>
 {% if not logged %}
-<div class="loginlayout"><div class="loginpanel">
-<div class="brand"><span>◉</span> SOCIAL LEAGUECUT <small>META STUDIO / INSTAGRAM</small></div>
-<h1 style="margin-top:40px">Bem-vindo de volta.</h1>
-<p class="muted">Gerencie os tokens de teste, agende Reels e acompanhe os dados reais da API oficial da Meta.</p>
-{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
-{% if not configured %}<div class="notice error">Configure ADMIN_PASSWORD, SESSION_SECRET e acesso ao MySQL na VPS.</div>{% endif %}
-<form action="/login" method="post"><input type="hidden" name="csrf" value="{{csrf}}">
-<label for="password" class="tiny">Senha administrativa</label><input type="password" name="password" id="password" autocomplete="current-password" required>
-<button class="btn" type="submit">Acessar painel →</button></form></div></div>
-{% else %}
-<div class="page">
-<aside><a class="brand" href="/"><span>◉</span> SOCIAL LEAGUECUT <small>META STUDIO / API OFICIAL</small></a>
-<nav><a class="navlink active" href="#overview">▦ Visão geral</a><a class="navlink" href="#accounts">◎ Contas e tokens</a><a class="navlink" href="#scheduler">◷ Agendar Reels</a><a class="navlink" href="#analytics">▥ Publicações e dados</a></nav>
-<div class="foot">Publicação pelo Graph API<br>Fuso da agenda: <strong>Fortaleza (UTC−3)</strong><br>Tokens criptografados no servidor.</div></aside>
-<main>
-<header><div><div class="eyebrow">Social LeagueCut / Painel administrativo</div><h1 id="overview">Seu conteúdo. No controle.</h1><div class="muted">Agendamento e análise de Reels com contas de teste autorizadas.</div></div>
-<form method="post" action="/logout"><input type="hidden" name="csrf" value="{{csrf}}"><button class="logout" type="submit">Sair ↗</button></form></header>
+<div class="loginbg"><div class="login"><div class="brand"><i>◉</i> SOCIAL LEAGUECUT<small>INSTAGRAM STUDIO / META API</small></div>
+<h1 style="margin-top:36px">Bem-vindo de volta.</h1><p class="muted">Gerencie perfis, publique Reels e acompanhe resultados com a API oficial do Instagram.</p>
 {% if error %}<div class="notice error">{{error}}</div>{% endif %}
-{% if success %}<div class="notice">{{success}}</div>{% endif %}
-<section class="kpis">
-<div class="kpi"><span>Contas cadastradas</span><b>{{accounts|length}}</b><em>Tokens manuais verificados</em></div>
-<div class="kpi"><span>Publicações agendadas</span><b>{{totals.scheduled or 0}}</b><em>Aguardando o horário</em></div>
-<div class="kpi"><span>Reels publicados</span><b>{{totals.published or 0}}</b><em>Confirmados pela Meta</em></div>
-<div class="kpi"><span>Visualizações conhecidas</span><b>{{"{:,}".format(totals.views or 0).replace(",",".")}}</b><em>Última coleta disponível</em></div>
+{% if not configured %}<div class="notice error">Configuração de acesso incompleta na VPS.</div>{% endif %}
+<form method="post" action="/login"><input type="hidden" name="csrf" value="{{csrf}}"><label for="password" class="small">Senha administrativa</label><input type="password" id="password" name="password" autocomplete="current-password" required><button class="btn">Acessar painel →</button></form>
+</div></div>
+{% else %}
+<div class="layout">
+<aside><a class="brand" href="/"><i>◉</i> SOCIAL LEAGUECUT<small>INSTAGRAM STUDIO</small></a>
+<nav class="menu"><a href="#inicio">▦ Visão geral</a><a href="#perfis">◎ Perfis conectados</a><a href="#publicar">＋ Novo Reel</a><a href="#lote">◷ Agendamento em lote</a><a href="#posts">▤ Posts e Analytics</a></nav>
+<div class="sidefoot">API oficial da Meta<br>Horário de Fortaleza (UTC−3)<br>Tokens protegidos no servidor</div>
+</aside>
+<main>
+<header class="top" id="inicio"><div><div class="eyebrow">Instagram Studio · Gestão e análise</div><h1>Seu Instagram, de ponta a ponta.</h1><div class="muted">Contas, conteúdo, calendário e resultados em um só lugar.</div></div>
+<form method="post" action="/logout"><input type="hidden" name="csrf" value="{{csrf}}"><button class="btn flat sm">Sair</button></form>
+</header>
+{% if error %}<div class="notice error" role="alert">{{error}}</div>{% endif %}
+{% if success %}<div class="notice" role="status">{{success}}</div>{% endif %}
+<div class="kpis">
+<div class="kpi"><span>Perfis conectados</span><b>{{accounts|length}}</b><small>Tokens cadastrados manualmente</small></div>
+<div class="kpi"><span>Publicações no painel</span><b>{{totals.published or 0}}</b><small>Importadas + publicadas pelo Studio</small></div>
+<div class="kpi"><span>Visualizações registradas</span><b>{{"{:,}".format(totals.views or 0).replace(",",".")}}</b><small>Soma das visualizações conhecidas dos posts</small></div>
+<div class="kpi"><span>Reels agendados</span><b>{{totals.scheduled or 0}}</b><small>Aguardando o horário programado</small></div>
+</div>
+<section class="panel" id="perfis">
+<div class="paneltitle"><div><h2><span class="sectionno">01</span> Seus perfis Instagram</h2><p class="muted small" style="margin:7px 0 0">Sincronize cada perfil para importar os posts existentes e ler informações e métricas disponíveis na Meta.</p></div><a class="btn secondary sm" href="#conectar">＋ Adicionar perfil</a></div>
+<div class="accounts">
+{% for a in accounts %}
+<article class="account">
+<div class="account-top"><div class="avatar">{% if a.avatar_url and a.avatar_url.startswith('https://') %}<img loading="lazy" referrerpolicy="no-referrer" src="{{a.avatar_url}}" alt="Foto do perfil @{{a.username}}">{% else %}◎{% endif %}</div>
+<div class="userlabel"><strong>@{{a.username}}</strong><small>{{a.name or 'Perfil conectado'}} · {{a.account_type or 'Instagram profissional'}}</small></div><span class="pill {{a.status}}">{{'Ativo' if a.status=='active' else 'Pausado'}}</span></div>
+<div class="stats3"><div><b>{{"{:,}".format(a.followers_count).replace(",",".") if a.followers_count is not none else "—"}}</b><span>Seguidores</span></div><div><b>{{"{:,}".format(a.follows_count).replace(",",".") if a.follows_count is not none else "—"}}</b><span>Seguindo</span></div><div><b>{{"{:,}".format(a.media_count).replace(",",".") if a.media_count is not none else "—"}}</b><span>Publicações</span></div></div>
+<div class="account-insight">
+<div><b>{{"{:,}".format(a.yesterday_views).replace(",",".") if a.yesterday_views is not none else "N/D"}}</b><span>Visualizações · ontem (API)</span></div>
+<div><b>{{"{:,}".format(a.yesterday_reach).replace(",",".") if a.yesterday_reach is not none else "N/D"}}</b><span>Alcance · ontem (API)</span></div>
+<div><b>{{"{:,}".format(a.yesterday_profile_visits).replace(",",".") if a.yesterday_profile_visits is not none else "N/D"}}</b><span>Visitas ao perfil · ontem</span></div>
+<div><b>{{"{:,}".format(a.yesterday_accounts_engaged).replace(",",".") if a.yesterday_accounts_engaged is not none else "N/D"}}</b><span>Contas engajadas · ontem</span></div>
+</div>
+{% if a.biography %}<p class="account-bio">{{a.biography}}</p>{% endif %}
+<div class="account-actions">
+<form method="post" action="/accounts/{{a.id}}/sync" onsubmit="this.querySelector('button').disabled=true;this.querySelector('button').textContent='Sincronizando…'"><input type="hidden" name="csrf" value="{{csrf}}"><button class="btn sm" type="submit">↻ Sincronizar dados</button></form>
+<a class="btn secondary sm" href="https://www.instagram.com/{{a.username}}/" target="_blank" rel="noopener noreferrer">Ver Instagram ↗</a>
+<form method="post" action="/accounts/{{a.id}}/toggle"><input type="hidden" name="csrf" value="{{csrf}}"><button class="btn flat sm">{{'Pausar' if a.status=='active' else 'Ativar'}}</button></form>
+</div>
+<div class="micro muted" style="margin-top:12px">Última sincronização: {{a.synced_local}} · {{a.imported_count or 0}} publicações identificadas</div>
+{% if a.insights_error %}<div class="micro" style="color:var(--orange);margin-top:5px">Algumas métricas não foram liberadas pelo token.</div>{% endif %}
+{% if a.media_error %}<div class="micro" style="color:var(--orange);margin-top:5px">A leitura dos posts retornou uma limitação. Confira as permissões.</div>{% endif %}
+</article>
+{% else %}
+<div class="empty" style="grid-column:1/-1">Nenhum perfil conectado. Adicione o token no formulário abaixo para começar.</div>
+{% endfor %}
+</div>
+<details id="conectar" style="margin-top:17px"><summary>＋ Conectar Instagram / atualizar token existente</summary>
+<div class="helpbox" style="margin-bottom:15px"><strong>Conexão em 2 passos:</strong> acesse Meta for Developers → seu app → Instagram → Gerar tokens de acesso; autorize as permissões e cole o token abaixo. O sistema identifica o @ automaticamente. Não é necessário fornecer sua senha do Instagram.</div>
+<form method="post" action="/accounts"><input type="hidden" name="csrf" value="{{csrf}}"><div class="formgrid"><div class="field"><label for="token">Token gerado na Meta</label><input type="password" id="token" name="token" autocomplete="off" placeholder="Cole o token aqui" minlength="30" required><div class="hint">O token será validado e criptografado no banco.</div></div><div style="display:flex;align-items:end"><button class="btn" type="submit">Validar e salvar token →</button></div></div></form>
+</details>
 </section>
-<div class="split" id="accounts">
-<section class="panel" style="margin-top:0">
-<div class="panelhead"><h2><span class="sectionno">01</span> Contas conectadas</h2><span class="tag">{{accounts|length}} perfil(is)</span></div>
-<div class="tablewrap"><table style="min-width:450px"><thead><tr><th>Instagram</th><th>ID Meta</th><th>Status</th><th>Ação</th></tr></thead>
-<tbody>
-{% for a in accounts %}<tr><td><strong>@{{a.username}}</strong><div class="tiny muted">Token cadastrado: {{a.token_saved_at.strftime("%d/%m/%Y")}}</div></td><td class="muted">{{a.ig_scoped_id}}</td><td><span class="tag {{a.status}}">{{"Ativa" if a.status=="active" else "Pausada"}}</span></td><td><form method="post" action="/accounts/{{a.id}}/toggle"><input type="hidden" name="csrf" value="{{csrf}}"><button type="submit" class="btn secondary small">{{"Pausar" if a.status=="active" else "Ativar"}}</button></form></td></tr>
-{% else %}<tr><td colspan="4" class="emptystate">Nenhuma conta conectada. Cole o primeiro token ao lado.</td></tr>{% endfor %}
-</tbody></table></div>
+<section class="panel" id="publicar">
+<div class="paneltitle"><div><h2><span class="sectionno">02</span> Criar e agendar Reel</h2><p class="small muted" style="margin:7px 0 0">Escolha a conta, envie o MP4, escreva a legenda e defina quando publicar.</p></div><span class="pill">Publicação oficial · Instagram Reels</span></div>
+<form id="scheduleForm" method="post" action="/schedule"><input type="hidden" name="csrf" value="{{csrf}}">
+<div class="steps">
+<div>
+<div class="field"><span>1. Em quais perfis vamos publicar?</span><div class="accountselect">
+{% for a in accounts %}<label class="{{'disabled' if a.status!='active' else ''}}"><input type="checkbox" name="account_ids" value="{{a.id}}" {{'disabled' if a.status!='active' else ''}}> @{{a.username}}</label>{% else %}<span class="small muted">Cadastre uma conta acima antes de publicar.</span>{% endfor %}
+</div></div>
+<div class="sep"></div>
+<div class="field"><span>2. Selecione o vídeo</span>
+<label class="droparea" for="upload" id="dropArea"><span class="uploadicon">↑</span><strong id="fileTitle">Clique para escolher seu vídeo MP4</strong><span class="small muted" id="fileHint">O envio começa automaticamente. Você não precisa preencher URL.</span><input type="file" id="upload" accept=".mp4,video/mp4"></label>
+<video controls playsinline class="video-preview" id="videoPreview"></video><div class="uploadline" id="uploadLine" hidden><i id="uploadFill"></i></div>
+<div class="small" id="uploadStatus" role="status" aria-live="polite" style="margin-top:9px;color:#c9cfdb"></div>
+<input type="hidden" name="video_url" id="videoUrl">
+<details style="margin-top:12px"><summary>Opção avançada: usar vídeo hospedado em URL HTTPS</summary><div class="field" style="margin-top:10px"><label for="externalVideoUrl">Link direto do arquivo</label><input type="url" id="externalVideoUrl" placeholder="https://.../video.mp4"><div class="hint">Só use se o vídeo já estiver hospedado publicamente. Quando colar, o sistema utilizará este endereço.</div></div></details>
+</div>
+<div class="sep"></div>
+<div class="field"><label for="caption">3. Legenda e hashtags</label><textarea id="caption" name="caption" maxlength="2200" placeholder="Escreva aqui a legenda para o Reel..."></textarea><div class="hint">Você pode incluir hashtags e menções no texto.</div></div>
+</div>
+<div>
+<div class="helpbox"><strong>Como funciona?</strong><p style="margin:8px 0 0">Você escolhe o vídeo, e o Social LeagueCut o envia para o servidor. No horário marcado, a Meta recebe e publica o Reel. O painel guarda o link e coleta as métricas disponíveis.</p></div>
+<div class="field" style="margin-top:18px"><label for="scheduled">4. Data e horário (Fortaleza)</label><input id="scheduled" type="datetime-local" name="scheduled_at" value="{{now_local}}" required><div class="hint">Para testar agora, escolha um horário próximo. A VPS precisa estar ativa.</div></div>
+<div class="field" style="margin-top:18px"><label for="interval">Intervalo entre perfis</label><select id="interval" name="interval_minutes"><option value="0">Mesmo horário para todos</option><option value="15">15 minutos</option><option value="30" selected>30 minutos</option><option value="60">1 hora</option></select><div class="hint">Aplicável quando selecionar mais de uma conta.</div></div>
+<div class="options"><button class="btn" type="submit" id="scheduleBtn">Agendar publicação →</button><span class="small muted" id="scheduleHint">Nenhuma postagem é criada antes de confirmar.</span></div>
+</div></div></form>
 </section>
-<section class="panel" style="margin-top:0"><div class="panelhead"><h2><span class="sectionno">02</span> Adicionar token</h2></div>
-<p class="muted tiny">Gere o token em Meta for Developers → Instagram → Gerar tokens de acesso. Cole aqui. A conta é identificada automaticamente pelo token.</p>
-<form method="post" action="/accounts"><input type="hidden" name="csrf" value="{{csrf}}">
-<div class="field"><label for="token">Token de acesso do Instagram</label><input id="token" name="token" type="password" minlength="30" autocomplete="off" placeholder="IGQ..." required></div>
-<p class="tiny muted">Nunca mostramos o token completo depois de salvo. Colar um novo token da mesma conta atualiza o anterior.</p>
-<button class="btn" type="submit">Validar e conectar conta</button></form>
-</section></div>
-<section class="panel" id="scheduler">
-<div class="panelhead"><h2><span class="sectionno">03</span> Programar publicação</h2><span class="tag">Reels · Instagram API</span></div>
-<form id="scheduleForm" action="/schedule" method="post"><input type="hidden" name="csrf" value="{{csrf}}">
-<div class="formgrid">
-<div class="field wide"><span>Selecione as contas que receberão o Reel</span><div class="accountselect">
-{% for a in accounts %}<label class="{{'disabled' if a.status!='active' else ''}}"><input type="checkbox" name="account_ids" value="{{a.id}}" {{'disabled' if a.status!='active' else ''}}> @{{a.username}}</label>
-{% else %}<span class="muted tiny">Cadastre primeiro ao menos uma conta.</span>{% endfor %}</div></div>
-<div class="field wide"><label for="upload">Arquivo MP4 (opcional)</label><div class="actions"><input type="file" id="upload" accept=".mp4,video/mp4" style="max-width:450px"><button type="button" id="uploadBtn" class="btn secondary" onclick="sendVideo()">Enviar vídeo</button><span id="uploadStatus" class="muted tiny">Ou informe uma URL pública HTTPS abaixo.</span></div></div>
-<div class="field wide"><label for="videoUrl">URL HTTPS do vídeo para a Meta</label><input type="url" id="videoUrl" name="video_url" placeholder="https://.../video.mp4" required><div class="tiny muted" style="margin-top:6px">O arquivo precisa estar acessível publicamente até a publicação. Para upload direto, configure o limite no Nginx (250 MB).</div></div>
-<div class="field wide"><label for="caption">Legenda e hashtags</label><textarea id="caption" name="caption" maxlength="2200" placeholder="Escreva a legenda do Reel..."></textarea></div>
-<div class="field"><label for="scheduled">Data e hora da primeira postagem · Fortaleza</label><input type="datetime-local" name="scheduled_at" id="scheduled" value="{{now_local}}" required></div>
-<div class="field"><label for="interval">Intervalo entre as contas (minutos)</label><input type="number" name="interval_minutes" id="interval" min="0" max="180" value="30"><div class="tiny muted" style="margin-top:6px">0 = todas no mesmo horário. 30 = uma conta a cada meia hora.</div></div>
-<div class="wide actions"><button class="btn" type="submit">Agendar publicações →</button><span class="tiny muted">O sistema publica automaticamente quando chegar a hora, desde que o servidor e a API estejam disponíveis.</span></div>
-</div></form>
-</section>
-<section class="panel" id="batch">
-<div class="panelhead"><h2><span class="sectionno">04</span> Campanha em lote · até 60 dias</h2><span class="tag">1 vídeo por dia / conta</span></div>
-<p class="tiny muted">Cole um link HTTPS por linha, na ordem em que os vídeos serão publicados. O sistema agenda o vídeo da linha 1 para o primeiro dia, o da linha 2 para o segundo dia e assim por diante. Em cada dia, todas as contas selecionadas recebem o mesmo Reel, nos horários escalonados.</p>
+<section class="panel" id="lote">
+<div class="paneltitle"><div><h2><span class="sectionno">03</span> Agendar vários vídeos</h2><p class="small muted" style="margin:7px 0 0">Perfeito para campanhas de 30 dias com várias contas, mantendo a mesma sequência de conteúdos.</p></div><span class="pill">1 vídeo / dia / perfil</span></div>
+<details><summary>Montar uma campanha em lote</summary>
 <form method="post" action="/batch" id="batchForm"><input type="hidden" name="csrf" value="{{csrf}}">
 <div class="formgrid">
-<div class="field wide"><span>Contas da campanha</span><div class="accountselect">
-{% for a in accounts %}<label class="{{'disabled' if a.status!='active' else ''}}"><input type="checkbox" name="account_ids" value="{{a.id}}" {{'disabled' if a.status!='active' else ''}}> @{{a.username}}</label>
-{% else %}<span class="tiny muted">Conecte uma conta antes de agendar.</span>{% endfor %}
-</div></div>
-<div class="field wide"><label for="batchUpload">Enviar vários MP4 (opcional)</label><div class="actions"><input type="file" id="batchUpload" accept=".mp4,video/mp4" multiple><button type="button" class="btn secondary" id="batchUploadBtn" onclick="sendBatchVideos()">Enviar vídeos e preencher URLs</button><span class="tiny muted" id="batchUploadStatus">Até 60 arquivos; o envio é sequencial.</span></div></div>
-<div class="field wide"><label for="batchUrls">URLs dos Reels (uma por linha, em ordem de publicação)</label><textarea id="batchUrls" name="video_urls_text" rows="7" placeholder="https://seu-servidor.com/video-01.mp4&#10;https://seu-servidor.com/video-02.mp4" required></textarea></div>
-<div class="field wide"><label for="batchCaption">Legenda padrão para os vídeos da campanha</label><textarea id="batchCaption" name="caption" rows="3" maxlength="2200" placeholder="Legenda, @menção e hashtags..."></textarea></div>
-<div class="field"><label>Data do primeiro dia</label><input type="date" name="first_date" value="{{now_local[:10]}}" required></div>
-<div class="field"><label>Primeira publicação do dia</label><input type="time" name="first_time" value="10:00" required></div>
-<div class="field"><label>Intervalo entre contas (minutos)</label><input type="number" name="interval_minutes" min="0" max="180" value="30" required></div>
-<div class="wide actions"><button type="submit" class="btn">Criar agenda de toda a campanha →</button><span class="tiny muted">Exemplo: 30 vídeos × 16 contas = 480 agendamentos, um por conta por dia, das 10h às 17h30.</span></div>
-</div></form></section>
-<section class="panel" id="analytics">
-<div class="panelhead"><div><h2><span class="sectionno">04</span> Publicações e métricas</h2><p class="muted tiny" style="margin:7px 0 0">Informações consultadas diretamente na Meta. N/D significa que a API ainda não disponibilizou o dado.</p></div><div class="actions"><input id="search" style="border:1px solid var(--edge);border-radius:8px;background:var(--bg);color:#fff;padding:10px 12px" oninput="filterPosts(this.value)" placeholder="Buscar conta ou status"><button onclick="location.reload()" class="btn secondary small">Atualizar ↻</button></div></div>
-<div class="tablewrap"><table id="postTable"><thead><tr><th>Agendado</th><th>Conta</th><th>Status</th><th>Views</th><th>Alcance</th><th>Curtidas</th><th>Comentários</th><th>Salvos</th><th>Compart.</th><th>Última leitura</th><th>Reel / ações</th></tr></thead>
-<tbody>{% for p in posts %}<tr>
-<td style="white-space:nowrap">{{p.scheduled_local}}</td><td><strong>@{{p.username}}</strong><div class="clamp muted tiny" title="{{p.caption}}">{{p.caption or "Sem legenda"}}</div></td>
-<td><span class="tag {{p.status}}">{{p.status}}</span>{% if p.error_hint %}<div class="tiny" style="color:#ffc492;max-width:160px">{{p.error_hint}}</div>{% endif %}</td>
-<td class="metric">{{p.views if p.views is not none else "N/D"}}</td><td class="metric">{{p.reach if p.reach is not none else "N/D"}}</td>
-<td class="metric">{{p.likes if p.likes is not none else "N/D"}}</td><td class="metric">{{p.comments if p.comments is not none else "N/D"}}</td>
-<td class="metric">{{p.saved if p.saved is not none else "N/D"}}</td><td class="metric">{{p.shares if p.shares is not none else "N/D"}}</td>
-<td style="white-space:nowrap">{{p.checked_local}}</td><td>{% if p.permalink %}<a href="{{p.permalink}}" target="_blank" rel="noopener noreferrer">Abrir Reel ↗</a>{% elif p.status=="scheduled" %}<form action="/posts/{{p.id}}/cancel" method="post"><input type="hidden" name="csrf" value="{{csrf}}"><button class="btn secondary small" type="submit">Cancelar</button></form>{% else %}—{% endif %}</td>
-</tr>{% else %}<tr><td colspan="11" class="emptystate">As publicações vão aparecer aqui quando você criar o primeiro agendamento.</td></tr>{% endfor %}</tbody></table></div>
-<p class="tiny muted">Os jobs com status <strong>needs_review</strong> precisam de conferência manual no Instagram: o sistema não republica automaticamente quando o retorno da Meta é incerto.</p>
+<div class="field spanall"><span>Selecione os perfis</span><div class="accountselect">{% for a in accounts %}<label class="{{'disabled' if a.status!='active' else ''}}"><input type="checkbox" name="account_ids" value="{{a.id}}" {{'disabled' if a.status!='active' else ''}}>@{{a.username}}</label>{% else %}<span class="small muted">Conecte uma conta para agendar.</span>{% endfor %}</div></div>
+<div class="field spanall"><label for="batchUpload">Arquivos MP4 (um vídeo por dia)</label><input type="file" id="batchUpload" accept=".mp4,video/mp4" multiple><div class="options" style="margin-top:9px"><button type="button" id="batchUploadBtn" class="btn secondary sm" onclick="sendBatchVideos()">Enviar vídeos selecionados</button><span id="batchUploadStatus" class="small muted" role="status">Até 60 vídeos; o envio acontece um por vez.</span></div></div>
+<div class="field spanall"><label for="batchUrls">Vídeos da campanha em ordem (1 URL por linha)</label><textarea id="batchUrls" name="video_urls_text" rows="5" required placeholder="Depois do upload, os links aparecem aqui automaticamente."></textarea><div class="hint">O primeiro arquivo será publicado no primeiro dia, e assim sucessivamente. Também aceita links externos HTTPS.</div></div>
+<div class="field spanall"><label for="batchCaption">Legenda padrão dos vídeos</label><textarea name="caption" id="batchCaption" rows="3" maxlength="2200" placeholder="Legenda e hashtags..."></textarea></div>
+<div class="field"><label for="firstDate">Data inicial</label><input id="firstDate" type="date" name="first_date" value="{{now_local[:10]}}" required></div>
+<div class="field"><label for="firstTime">Primeiro horário do dia</label><input id="firstTime" type="time" name="first_time" value="10:00" required></div>
+<div class="field"><label for="batchInterval">Intervalo entre perfis (minutos)</label><input id="batchInterval" type="number" min="0" max="180" name="interval_minutes" value="30" required></div>
+<div class="spanall options"><button class="btn" type="submit">Programar campanha completa →</button><span class="small muted">Exemplo: 30 vídeos × 16 contas = 480 agendamentos.</span></div>
+</div></form></details>
 </section>
-<section class="hints" style="margin-top:20px"><strong>Como funciona a conexão?</strong> O token é obtido manualmente no painel da Meta e fica criptografado no MySQL. A geração de tokens não é feita pelo Social LeagueCut. Para publicar são necessárias permissões de publicação e conta Instagram profissional autorizada no app em desenvolvimento. As métricas dependem da permissão de Insights e podem variar por Reel. O token poderá precisar ser gerado novamente quando expirar.</section>
-</main></div>
+<section class="panel" id="posts">
+<div class="paneltitle"><div><h2><span class="sectionno">04</span> Publicações e Analytics</h2><p class="small muted" style="margin:7px 0 0">Conteúdos importados diretamente do Instagram e Reels agendados pelo Social LeagueCut. As métricas são atualizadas periodicamente.</p></div><div class="filters"><input id="postSearch" placeholder="Buscar publicação…" aria-label="Buscar publicação" oninput="filterPosts()"><select id="postAccount" aria-label="Filtrar conta" onchange="filterPosts()"><option value="">Todas as contas</option>{% for a in accounts %}<option value="{{a.username}}">@{{a.username}}</option>{% endfor %}</select><select id="postStatus" aria-label="Filtrar status" onchange="filterPosts()"><option value="">Todos os status</option><option value="imported,published">Publicados</option><option value="scheduled,creating,processing,publishing">Programados</option><option value="failed,needs_review">Com problemas</option></select></div></div>
+<div class="posts" id="postsList">
+{% for p in posts %}
+<article class="post" data-account="{{p.username}}" data-status="{{p.status}}">
+{% if p.thumbnail_url and p.thumbnail_url.startswith('https://') %}<img class="thumb" loading="lazy" referrerpolicy="no-referrer" src="{{p.thumbnail_url}}" alt="Miniatura da publicação">
+{% elif p.media_url and p.media_type=='IMAGE' and p.media_url.startswith('https://') %}<img class="thumb" loading="lazy" referrerpolicy="no-referrer" src="{{p.media_url}}" alt="Publicação">
+{% else %}<div class="thumb thumbempty">▶</div>{% endif %}
+<div class="post-title"><strong>{{p.caption[:75] if p.caption else ('Reel programado' if p.status in ['scheduled','creating','processing','publishing'] else 'Publicação no Instagram')}}</strong><p>@{{p.username}} · {{'Reel' if p.product_type=='REELS' else p.media_type or 'Vídeo'}}</p><small>{{'Programado: ' if p.status in ['scheduled','creating','processing','publishing'] else 'Publicado: '}}{{p.scheduled_local}}</small></div>
+<div class="poststatus"><span class="pill {{p.status}}">{{'No Instagram' if p.status=='imported' else 'Publicado' if p.status=='published' else 'Agendado' if p.status=='scheduled' else 'Em processamento' if p.status in ['processing','creating','publishing'] else 'Revisar' if p.status=='needs_review' else 'Falhou' if p.status=='failed' else 'Cancelado' if p.status=='cancelled' else p.status}}</span>
+{% if p.error_hint %}<div class="micro" style="color:var(--orange);margin-top:6px">{{p.error_hint}}</div>{% endif %}</div>
+<div class="poststats"><div><b>{{"{:,}".format(p.views).replace(",",".") if p.views is not none else "N/D"}}</b><span>Views</span></div><div><b>{{"{:,}".format(p.likes).replace(",",".") if p.likes is not none else "N/D"}}</b><span>Curtidas</span></div><div><b>{{"{:,}".format(p.comments).replace(",",".") if p.comments is not none else "N/D"}}</b><span>Comentários</span></div>
+<div><b>{{"{:,}".format(p.reach).replace(",",".") if p.reach is not none else "N/D"}}</b><span>Alcance</span></div><div><b>{{"{:,}".format(p.saved).replace(",",".") if p.saved is not none else "N/D"}}</b><span>Salvos</span></div><div><b>{{"{:,}".format(p.shares).replace(",",".") if p.shares is not none else "N/D"}}</b><span>Envios</span></div></div>
+<div class="postbtn">
+{% if p.permalink %}<a class="btn secondary sm" target="_blank" rel="noopener noreferrer" href="{{p.permalink}}">Abrir post ↗</a>
+{% elif p.status=='scheduled' %}<form method="post" action="/posts/{{p.id}}/cancel"><input type="hidden" name="csrf" value="{{csrf}}"><button type="submit" class="btn secondary sm">Cancelar</button></form>{% else %}<span class="micro muted">{{p.checked_local}}</span>{% endif %}
+</div>
+</article>
+{% else %}<div class="empty">Ainda não há posts no painel. Clique em “Sincronizar dados” no perfil para importar as publicações existentes.</div>{% endfor %}
+</div><div id="postsEmpty" class="empty" style="display:none;margin-top:9px">Nenhuma publicação encontrada com esses filtros.</div>
+<div class="small muted" style="margin-top:14px">São exibidos os últimos 200 registros no painel. N/D significa que a API não retornou aquele indicador para a publicação. A importação consulta até 50 conteúdos recentes por sincronização.</div>
+</section>
+<div class="helpbox" style="margin-top:18px">As permissões de publicação e Insights devem estar autorizadas no aplicativo Meta. Perfis testadores só funcionam dentro do escopo permitido pelo modo de desenvolvimento. O servidor nunca exibe o token cadastrado, e ações de publicação incertas não são repetidas automaticamente.</div>
+</main>
+</div>
 <script>
-function filterPosts(value){var q=value.trim().toLowerCase();document.querySelectorAll("#postTable tbody tr").forEach(function(row){row.hidden=!row.textContent.toLowerCase().includes(q)})}
+function filterPosts(){
+ const query=document.getElementById("postSearch").value.trim().toLowerCase();
+ const account=document.getElementById("postAccount").value;
+ const statuses=document.getElementById("postStatus").value.split(",");
+ let shown=0;
+ document.querySelectorAll("#postsList .post").forEach(p=>{
+  const visible=(!query||p.textContent.toLowerCase().includes(query))&&
+    (!account||p.dataset.account===account)&&
+    (!statuses[0]||statuses.includes(p.dataset.status));
+  p.hidden=!visible;if(visible)shown++;
+ });
+ document.getElementById("postsEmpty").style.display=shown||!document.querySelector("#postsList .post")?"none":"block";
+}
+function postFile(form, file, progress){
+ return new Promise((resolve,reject)=>{
+  const fd=new FormData();fd.append("csrf",form.querySelector('input[name="csrf"]').value);fd.append("video",file);
+  const xhr=new XMLHttpRequest();xhr.open("POST","/upload",true);xhr.withCredentials=true;xhr.responseType="json";
+  xhr.upload.onprogress=e=>{if(e.lengthComputable&&progress)progress(Math.round(e.loaded/e.total*100))};
+  xhr.onload=()=>{const result=xhr.response||{};if(xhr.status>=200&&xhr.status<300&&result.url)resolve(result.url);else reject(new Error(result.detail||"Falha no envio. Confira o limite de tamanho da VPS."))};
+  xhr.onerror=()=>reject(new Error("Falha de conexão durante o upload."));xhr.send(fd);
+ });
+}
+let uploadBusy=false;
 async function sendVideo(){
- var file=document.getElementById("upload").files[0],btn=document.getElementById("uploadBtn"),status=document.getElementById("uploadStatus");
- if(!file){status.textContent="Selecione um MP4 primeiro.";return}
- if(!file.name.toLowerCase().endsWith(".mp4")||file.size>250*1024*1024){status.textContent="Use um MP4 de até 250 MB.";return}
- var form=new FormData();form.append("csrf",document.querySelector("#scheduleForm input[name=csrf]").value);form.append("video",file);
- btn.disabled=true;status.textContent="Enviando "+file.name+"...";
- try{var res=await fetch("/upload",{method:"POST",body:form,credentials:"same-origin"});var data=await res.json();if(!res.ok)throw Error(data.detail||"Falha no upload");document.getElementById("videoUrl").value=data.url;status.textContent="Vídeo enviado! URL preenchida e pronta para agendar."}
- catch(e){status.textContent=e.message||"Falha no upload"}
- finally{btn.disabled=false}
+ const file=document.getElementById("upload").files[0],status=document.getElementById("uploadStatus"),fill=document.getElementById("uploadFill"),line=document.getElementById("uploadLine"),button=document.getElementById("scheduleBtn");
+ const hidden=document.getElementById("videoUrl");
+ hidden.value="";if(!file)return;
+ if(!file.name.toLowerCase().endsWith(".mp4")||file.size>250*1024*1024){status.textContent="Escolha MP4 de até 250 MB.";return}
+ document.getElementById("fileTitle").textContent=file.name;
+ document.getElementById("fileHint").textContent="Enviando para o Social LeagueCut…";
+ const preview=document.getElementById("videoPreview");preview.src=URL.createObjectURL(file);preview.style.display="block";
+ line.hidden=false;fill.style.width="0%";button.disabled=true;uploadBusy=true;status.textContent="Enviando vídeo: 0%";
+ try{const url=await postFile(document.getElementById("scheduleForm"),file,p=>{fill.style.width=p+"%";status.textContent="Enviando vídeo: "+p+"%"});
+  hidden.value=url;document.getElementById("externalVideoUrl").value="";status.textContent="✓ Vídeo enviado e pronto para agendar.";document.getElementById("fileHint").textContent="Upload concluído! Agora defina o horário e a legenda.";
+ }catch(err){status.textContent=err.message;document.getElementById("fileHint").textContent="Falha no upload. Tente novamente ou use um link HTTPS."}
+ finally{button.disabled=false;uploadBusy=false}
 }
+document.getElementById("upload").addEventListener("change",sendVideo);
+const drop=document.getElementById("dropArea");
+drop.addEventListener("dragover",e=>{e.preventDefault();drop.classList.add("drag")});
+drop.addEventListener("dragleave",()=>drop.classList.remove("drag"));
+drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("drag");if(e.dataTransfer.files.length){document.getElementById("upload").files=e.dataTransfer.files;sendVideo()}});
+document.getElementById("externalVideoUrl").addEventListener("input",e=>{document.getElementById("videoUrl").value=e.target.value.trim()});
+document.getElementById("scheduleForm").addEventListener("submit",e=>{
+ if(uploadBusy){e.preventDefault();document.getElementById("uploadStatus").textContent="O vídeo ainda está sendo enviado.";return}
+ if(!document.getElementById("videoUrl").value){e.preventDefault();document.getElementById("uploadStatus").textContent="Envie um MP4 ou informe um link HTTPS na opção avançada.";document.getElementById("dropArea").scrollIntoView({behavior:"smooth",block:"center"});return}
+ if(!e.currentTarget.querySelector("input[name=account_ids]:checked")){e.preventDefault();document.getElementById("scheduleHint").textContent="Selecione pelo menos uma conta.";return}
+ document.getElementById("scheduleBtn").disabled=true;
+});
 async function sendBatchVideos(){
- var files=Array.from(document.getElementById("batchUpload").files);
- var status=document.getElementById("batchUploadStatus"),btn=document.getElementById("batchUploadBtn");
- if(!files.length||files.length>60){status.textContent="Escolha entre 1 e 60 MP4.";return}
- btn.disabled=true;var urls=[];
- try{
-  for(var i=0;i<files.length;i++){
-   var file=files[i];if(!file.name.toLowerCase().endsWith(".mp4")||file.size>250*1024*1024)throw Error(file.name+" não é um MP4 válido de até 250 MB.");
-   status.textContent="Enviando vídeo "+(i+1)+"/"+files.length+": "+file.name;
-   var body=new FormData();body.append("csrf",document.querySelector("#batchForm input[name=csrf]").value);body.append("video",file);
-   var response=await fetch("/upload",{method:"POST",body:body,credentials:"same-origin"});
-   var result=await response.json();if(!response.ok)throw Error(result.detail||"Falha ao enviar "+file.name);
-   urls.push(result.url);
-  }
-  var field=document.getElementById("batchUrls");field.value=(field.value.trim()?field.value.trim()+"\n":"")+urls.join("\n");
-  status.textContent=urls.length+" vídeo(s) enviados. Links inseridos na agenda.";
- }catch(e){if(urls.length){var field=document.getElementById("batchUrls");field.value=(field.value.trim()?field.value.trim()+"\n":"")+urls.join("\n")}status.textContent=e.message||"Falha no envio."}
- finally{btn.disabled=false}
+ const files=Array.from(document.getElementById("batchUpload").files),status=document.getElementById("batchUploadStatus"),btn=document.getElementById("batchUploadBtn");
+ if(!files.length||files.length>60){status.textContent="Escolha de 1 a 60 vídeos MP4.";return}
+ btn.disabled=true;const urls=[];
+ try{for(let i=0;i<files.length;i++){
+  if(!files[i].name.toLowerCase().endsWith(".mp4")||files[i].size>250*1024*1024)throw new Error("Vídeo inválido: "+files[i].name);
+  status.textContent="Enviando "+(i+1)+"/"+files.length+"…";
+  const url=await postFile(document.getElementById("batchForm"),files[i],p=>status.textContent="Enviando "+(i+1)+"/"+files.length+" · "+p+"%");
+  urls.push(url);
+ }
+ status.textContent="✓ "+urls.length+" vídeos enviados com sucesso.";
+ }catch(err){status.textContent=err.message}
+ finally{
+  if(urls.length){const field=document.getElementById("batchUrls");field.value=(field.value.trim()?field.value.trim()+"\n":"")+urls.join("\n");}
+  btn.disabled=false;
+ }
 }
+document.getElementById("batchForm").addEventListener("submit",e=>{
+ if(!e.currentTarget.querySelector("input[name=account_ids]:checked")){e.preventDefault();document.getElementById("batchUploadStatus").textContent="Selecione pelo menos uma conta.";return}
+ if(!document.getElementById("batchUrls").value.trim()){e.preventDefault();document.getElementById("batchUploadStatus").textContent="Envie os vídeos antes de agendar."}
+});
 </script>
 {% endif %}
 </body></html>
