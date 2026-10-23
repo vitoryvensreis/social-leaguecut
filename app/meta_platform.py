@@ -760,32 +760,47 @@ def metrics_cycle(db, limit=12):
         except Exception:
             LOG.exception("Metrics read error for post=%s", item["id"])
 
-def run_cycle():
-    if not all(os.getenv(k) for k in ("DB_USER", "DB_PASSWORD", "DB_NAME")):
+def run_publish_cycle():
+    if not all(os.getenv(k) for k in ("DB_USER","DB_PASSWORD","DB_NAME")):
         return
     with db_connection() as db:
         init(db)
         publish_cycle(db)
-        metrics_cycle(db)
 
-async def service_loop():
+def run_metrics_cycle():
+    if not all(os.getenv(k) for k in ("DB_USER","DB_PASSWORD","DB_NAME")):
+        return
+    with db_connection() as db:
+        init(db)
+        metrics_cycle(db,limit=4)
+
+def run_cycle():
+    """Retain a one-shot entrypoint used by system tests."""
+    run_publish_cycle()
+    run_metrics_cycle()
+
+async def service_loop(worker, interval):
     while True:
         try:
-            await asyncio.to_thread(run_cycle)
+            await asyncio.to_thread(worker)
         except Exception:
-            LOG.exception("Meta service loop failed")
-        await asyncio.sleep(45)
+            LOG.exception("Meta worker failed: %s",worker.__name__)
+        await asyncio.sleep(interval)
 
 @app.on_event("startup")
 async def start_worker():
-    if os.getenv("META_WORKER_ENABLED", "true").lower() == "true":
-        app.state.meta_task = asyncio.create_task(service_loop())
+    if os.getenv("META_WORKER_ENABLED","true").lower()=="true":
+        app.state.meta_tasks=[
+            asyncio.create_task(service_loop(run_publish_cycle,20)),
+            asyncio.create_task(service_loop(run_metrics_cycle,120)),
+        ]
 
 @app.on_event("shutdown")
 async def stop_worker():
-    task = getattr(app.state, "meta_task", None)
-    if task:
+    tasks=getattr(app.state,"meta_tasks",[])
+    for task in tasks:
         task.cancel()
+    for task in tasks:
         try:
             await task
         except asyncio.CancelledError:
