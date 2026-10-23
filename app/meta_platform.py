@@ -487,6 +487,82 @@ def batch_schedule(request: Request, csrf: str = Form(...),
     return go(str(inserted) + " Reels agendados; " + str(skipped) +
               " horários anteriores ou já ocupados foram ignorados.")
 
+def publication_label(status):
+    return {
+        "scheduled":"Agendado","creating":"Criando mídia",
+        "processing":"Processando vídeo na Meta",
+        "publishing":"Enviando publicação",
+        "published":"Publicado","imported":"No Instagram",
+        "failed":"Falhou","needs_review":"Precisa verificar",
+        "cancelled":"Cancelado",
+    }.get(status,status)
+
+
+@app.get("/api/posts/status")
+def api_post_status(request: Request):
+    if not authenticated(request):
+        raise HTTPException(status_code=401,detail="Faça login para consultar.")
+    with db_connection() as db:
+        init(db)
+        with db.cursor() as c:
+            c.execute("""SELECT p.id,p.status,p.error_hint,p.permalink,
+                       p.container_id,p.media_id,chk.provider_status,
+                       chk.provider_detail,chk.checked_at
+                FROM meta_posts p
+                LEFT JOIN meta_publish_checks chk ON chk.post_id=p.id
+                ORDER BY p.scheduled_at_utc DESC LIMIT 200""")
+            rows=c.fetchall()
+    result=[]
+    for row in rows:
+        result.append({
+            "id":row["id"],"status":row["status"],
+            "label":publication_label(row["status"]),
+            "error_hint":row["error_hint"],
+            "permalink":row["permalink"],
+            "has_container":bool(row["container_id"]),
+            "provider_status":row["provider_status"],
+            "provider_detail":row["provider_detail"],
+            "provider_checked":fmt_local(row["checked_at"]),
+        })
+    return JSONResponse({"jobs":result},headers={"Cache-Control":"no-store"})
+
+
+@app.post("/posts/{post_id}/check")
+def check_post_on_meta(post_id: int, request: Request, csrf: str = Form(...)):
+    require_form(request,csrf)
+    with db_connection() as db:
+        init(db)
+        with db.cursor() as c:
+            c.execute("""SELECT id,account_id,container_id,status,updated_at
+                FROM meta_posts WHERE id=%s""",(post_id,))
+            job=c.fetchone()
+        if not job or job["status"] not in ("processing","needs_review","failed"):
+            return go("Esta publicação não requer diagnóstico de contêiner.",True)
+        if not job["container_id"]:
+            return go("Nenhum contêiner foi retornado pela Meta para esta publicação.",True)
+        try:
+            token,_=get_token(db,job["account_id"])
+            details=graph(str(job["container_id"]),token,
+                          {"fields":"status_code,status"})
+            state=record_provider_check(db,post_id,details)
+            if job["status"]=="processing":
+                if state in ("ERROR","EXPIRED"):
+                    set_state(db,post_id,"processing","failed",
+                              error_hint=str(details.get("status") or state)[:210])
+                elif state=="PUBLISHED":
+                    set_state(db,post_id,"processing","needs_review",
+                              error_hint="A Meta confirmou PUBLISHED; confira no Instagram.")
+            if state=="FINISHED":
+                return go("A Meta informa FINISHED: o worker vai finalizar esta publicação se ela ainda estiver em processamento. NÃO reagende.")
+            if state=="IN_PROGRESS":
+                return go("A Meta ainda está processando este vídeo. Não reenvie; se continuar assim, revise o formato/URL do MP4.")
+            if state=="PUBLISHED":
+                return go("A Meta sinalizou PUBLISHED. Confira o perfil antes de qualquer nova tentativa.")
+            return go("Situação da Meta: "+state+" — "+
+                      str(details.get("status") or "consulte o painel")[:120])
+        except (GraphError,RuntimeError) as exc:
+            return go("Diagnóstico da Meta: "+str(exc)[:180],True)
+
 @app.post("/posts/{post_id}/cancel")
 def cancel(post_id: int, request: Request, csrf: str = Form(...)):
     require_form(request, csrf)
