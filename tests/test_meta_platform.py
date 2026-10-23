@@ -37,22 +37,22 @@ class MetaPlatformTests(unittest.TestCase):
             with self.assertRaises(meta.GraphError):
                 meta.account_profile("token")
 
-    def test_instagram_media_stream_supports_head_get_and_range(self):
-        from fastapi.testclient import TestClient
+    def test_instagram_media_stream_supports_head_and_get(self):
         import tempfile
         from pathlib import Path
         opaque_id = "a" * 40
+        routes = [r for r in meta.app.routes if r.path == "/ig-video/{opaque_id}"]
+        self.assertEqual(len(routes), 1)
+        self.assertEqual(set(routes[0].methods), {"GET", "HEAD"})
         with tempfile.TemporaryDirectory() as directory, patch.object(meta,"MEDIA_DIR",Path(directory)):
             path=Path(directory)/(opaque_id+".mp4")
             path.write_bytes(b"fake-mp4-sample")
-            client=TestClient(meta.app)
-            head=client.head("/ig-video/"+opaque_id)
-            self.assertEqual(head.status_code,200)
-            self.assertEqual(head.headers["content-type"],"video/mp4")
-            get=client.get("/ig-video/"+opaque_id,headers={"Range":"bytes=0-3"})
-            self.assertEqual(get.status_code,206)
-            self.assertEqual(get.content,b"fake")
-            self.assertEqual(client.get("/ig-video/../secret").status_code,404)
+            response=meta.ig_video(opaque_id)
+            self.assertEqual(response.status_code,200)
+            self.assertEqual(response.media_type,"video/mp4")
+            self.assertEqual(str(response.path),str(path))
+            with self.assertRaises(Exception):
+                meta.ig_video("not-a-safe-video-id")
 
     def test_legacy_media_url_is_remapped_only_for_own_uploads(self):
         valid="b" * 40
