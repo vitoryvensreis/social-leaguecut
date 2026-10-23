@@ -91,6 +91,9 @@ jobs:
           .venv/bin/python -m pip install -r requirements.txt
           .venv/bin/python -c 'from app.main import app; print("Application import OK")'
           .venv/bin/python -m unittest discover -s tests -p 'test_meta*.py' -v
+          # One-time soft removal of the failed/uncertain Oct 22 test entries.
+          # Does not delete posts, videos, or touch future scheduled jobs.
+          .venv/bin/python -m scripts.dismiss_failed_tests
           sudo -n /usr/bin/systemctl restart social-leaguecut.service
           healthy=0
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
