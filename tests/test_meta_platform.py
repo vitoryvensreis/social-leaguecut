@@ -62,6 +62,37 @@ class MetaPlatformTests(unittest.TestCase):
         self.assertEqual(meta.normalize_owned_video_url("https://cdn.example.com/file.mp4"),
                          "https://cdn.example.com/file.mp4")
 
+    def test_publish_now_ignores_schedule_and_queues_all_accounts_immediately(self):
+        current=datetime(2026,10,23,1,15)
+        times=meta.publication_times("now","",30,3,current=current)
+        self.assertEqual(times,[current,current,current])
+
+    def test_schedule_still_uses_fortaleza_timezone_and_spacing(self):
+        current=datetime(2026,10,22,12,0)
+        times=meta.publication_times("schedule","2026-10-22T14:00",30,2,current=current)
+        self.assertEqual(times,[datetime(2026,10,22,17,0),datetime(2026,10,22,17,30)])
+
+    def test_publish_mode_rejects_unknown_mode_or_missing_date(self):
+        with self.assertRaises(ValueError):
+            meta.publication_times("instant","","0",2)
+        with self.assertRaises(ValueError):
+            meta.publication_times("schedule","",30,1)
+
+    def test_publish_now_button_and_single_submit_token_are_rendered(self):
+        from jinja2 import Environment, FileSystemLoader
+        from pathlib import Path
+        path=Path(__file__).resolve().parents[1]/"app"/"templates"
+        html=Environment(loader=FileSystemLoader(path),autoescape=True).get_template(
+            "meta_dashboard.html").render(
+                logged=True,csrf="test",submit_id="someNonce_123456789123456789",
+                accounts=[],posts=[],totals={},top_posts=[],error="",success="",
+                now_local="2026-10-22T20:00")
+        self.assertIn('id="publishNowBtn"',html)
+        self.assertIn('data-publish-mode="now"',html)
+        self.assertIn('name="submit_id"',html)
+        self.assertIn('id="scheduleBtn"',html)
+        self.assertIn('id="publishMode"',html)
+
     def test_web_routes_are_meta_only(self):
         route_paths = {r.path for r in meta.app.routes}
         self.assertIn("/accounts", route_paths)
